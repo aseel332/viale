@@ -1,151 +1,112 @@
-"use client";
+import { createClient } from "@/lib/supabase/server";
+import { getStorefrontCollections, getStorefrontProducts } from "@/lib/catalog";
+import type { AddressRow, PaymentMethodRow } from "@/types/database";
+import AuthPanel from "./AuthPanel";
+import AccountDashboard, { type OrderView, type WishlistView } from "./AccountDashboard";
 
-import { useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
+export const metadata = { title: "Account — Viale" };
 
-export default function AccountPage() {
-  const [mode, setMode]               = useState<"login" | "signup">("login");
-  const [showPassword, setShowPassword] = useState(false);
-  const [form, setForm]               = useState({ name: "", email: "", password: "" });
+type TabKey = "profile" | "addresses" | "orders" | "payment" | "wishlist";
+const VALID_TABS: TabKey[] = ["profile", "addresses", "orders", "payment", "wishlist"];
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-  };
+export default async function AccountPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ redirectTo?: string; error?: string; tab?: string }>;
+}) {
+  const { redirectTo, error, tab } = await searchParams;
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  // ── Not signed in → auth panel ──────────────────────────────────────────────
+  if (!user) {
+    return <AuthPanel redirectTo={redirectTo} oauthError={error} />;
+  }
+
+  // ── Signed in → fetch everything for the dashboard ──────────────────────────
+  const [
+    { data: profile },
+    { data: addresses },
+    { data: cards },
+    { data: orderRows },
+    { data: wishRows },
+    products,
+    collections,
+  ] =
+    await Promise.all([
+      supabase.from("profiles").select("full_name, phone").eq("id", user.id).maybeSingle(),
+      supabase.from("addresses").select("*").eq("user_id", user.id).order("is_default", { ascending: false }).order("created_at", { ascending: true }),
+      supabase.from("payment_methods").select("*").eq("user_id", user.id).order("is_default", { ascending: false }).order("created_at", { ascending: false }),
+      supabase
+        .from("orders")
+        .select("id, status, total_amount, created_at, order_items(product_id, collection_id, size_ml, quantity, unit_price)")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false }),
+      supabase.from("wishlist_items").select("product_id, created_at").eq("user_id", user.id).order("created_at", { ascending: false }),
+      getStorefrontProducts(),
+      getStorefrontCollections(),
+    ]);
+
+  // Resolve orders into display views.
+  // The hand-written DB types declare empty Relationships, so the embedded
+  // `order_items(...)` select isn't statically typed — cast to the known shape.
+  type ItemRow = { product_id: string | null; collection_id: string | null; size_ml: number | null; quantity: number; unit_price: number };
+  type RawOrder = { id: string; status: string; total_amount: number; created_at: string; order_items: ItemRow[] | null };
+  const rawOrders = (orderRows ?? []) as unknown as RawOrder[];
+
+  const orders: OrderView[] = rawOrders.map((o) => {
+    const itemsRaw = o.order_items ?? [];
+    const items = itemsRaw.map((it) => {
+      if (it.product_id) {
+        const p = products.find((x) => x.id === it.product_id);
+        return {
+          label: p?.name ?? it.product_id,
+          sub: `${p?.brand ?? ""}${it.size_ml ? ` · ${it.size_ml}ml` : ""}`.trim(),
+          qty: it.quantity,
+          lineTotal: it.unit_price * it.quantity,
+          imageSrc: p?.imageSrc ?? "/collection_img.png",
+        };
+      }
+      const c = collections.find((x) => x.id === it.collection_id);
+      return {
+        label: c?.name ?? it.collection_id ?? "Collection",
+        sub: "Collection · Box of 4",
+        qty: it.quantity,
+        lineTotal: it.unit_price * it.quantity,
+        imageSrc: "/collection_img.png",
+      };
+    });
+    return {
+      id: o.id,
+      status: o.status,
+      total: Number(o.total_amount),
+      createdAt: o.created_at,
+      items,
+    };
+  });
+
+  // Resolve wishlist
+  const wishlist: WishlistView[] = (wishRows ?? [])
+    .map((w) => {
+      const p = products.find((x) => x.id === w.product_id);
+      if (!p) return null;
+      return { productId: p.id, name: p.name, brand: p.brand, price: p.price, imageSrc: p.imageSrc };
+    })
+    .filter((w): w is WishlistView => Boolean(w));
+
+  const initialTab = (tab && VALID_TABS.includes(tab as TabKey) ? tab : "profile") as TabKey;
 
   return (
-    <div className="min-h-screen bg-[#FAFAF8] flex items-center justify-center px-5 py-20 pt-28">
-      <div className="w-full max-w-sm">
-
-        {/* Logo / brand */}
-        <div className="text-center mb-10">
-          <img src="/viale_logo_1.jpg" alt="Viale" className="h-8 object-contain mx-auto mb-6" />
-          <h1 className="text-3xl font-[family-name:var(--font-cormorant)] font-medium italic text-[#111]">
-            {mode === "login" ? "Welcome back" : "Create account"}
-          </h1>
-          <p className="text-[#6B6B6B] text-sm mt-2">
-            {mode === "login"
-              ? "Sign in to your Viale account."
-              : "Join thousands of scent lovers."}
-          </p>
-        </div>
-
-        {/* Tab toggle */}
-        <div className="flex border border-[#E8E4DE] mb-8">
-          <button
-            onClick={() => setMode("login")}
-            className={`flex-1 py-3 text-[11px] tracking-[0.15em] uppercase font-medium transition-colors ${
-              mode === "login" ? "bg-[#111] text-white" : "text-[#6B6B6B] hover:text-[#111]"
-            }`}
-          >
-            Sign In
-          </button>
-          <button
-            onClick={() => setMode("signup")}
-            className={`flex-1 py-3 text-[11px] tracking-[0.15em] uppercase font-medium transition-colors ${
-              mode === "signup" ? "bg-[#111] text-white" : "text-[#6B6B6B] hover:text-[#111]"
-            }`}
-          >
-            Register
-          </button>
-        </div>
-
-        {/* Form */}
-        <form
-          onSubmit={(e) => e.preventDefault()}
-          className="flex flex-col gap-4"
-        >
-          {mode === "signup" && (
-            <div>
-              <label className="block text-[10px] tracking-[0.15em] uppercase text-[#6B6B6B] mb-2">
-                Full Name
-              </label>
-              <input
-                name="name"
-                type="text"
-                value={form.name}
-                onChange={handleChange}
-                placeholder="Jane Doe"
-                className="w-full px-4 py-3.5 bg-white border border-[#E8E4DE] text-sm text-[#111] placeholder:text-[#B0ADA8] focus:outline-none focus:border-[#111] transition-colors"
-                required
-              />
-            </div>
-          )}
-
-          <div>
-            <label className="block text-[10px] tracking-[0.15em] uppercase text-[#6B6B6B] mb-2">
-              Email
-            </label>
-            <input
-              name="email"
-              type="email"
-              value={form.email}
-              onChange={handleChange}
-              placeholder="you@example.com"
-              className="w-full px-4 py-3.5 bg-white border border-[#E8E4DE] text-sm text-[#111] placeholder:text-[#B0ADA8] focus:outline-none focus:border-[#111] transition-colors"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-[10px] tracking-[0.15em] uppercase text-[#6B6B6B] mb-2">
-              Password
-            </label>
-            <div className="relative">
-              <input
-                name="password"
-                type={showPassword ? "text" : "password"}
-                value={form.password}
-                onChange={handleChange}
-                placeholder="••••••••"
-                className="w-full px-4 py-3.5 pr-12 bg-white border border-[#E8E4DE] text-sm text-[#111] placeholder:text-[#B0ADA8] focus:outline-none focus:border-[#111] transition-colors"
-                required
-              />
-              <button
-                type="button"
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-[#6B6B6B] hover:text-[#111] transition-colors"
-                onClick={() => setShowPassword((p) => !p)}
-                aria-label={showPassword ? "Hide password" : "Show password"}
-              >
-                {showPassword ? <EyeOff size={16} strokeWidth={1.5} /> : <Eye size={16} strokeWidth={1.5} />}
-              </button>
-            </div>
-          </div>
-
-          {mode === "login" && (
-            <div className="text-right">
-              <button type="button" className="text-[11px] text-[#6B6B6B] hover:text-[#111] transition-colors tracking-wide underline-offset-2 hover:underline">
-                Forgot password?
-              </button>
-            </div>
-          )}
-
-          <button
-            type="submit"
-            className="mt-2 w-full bg-[#111] text-white text-[11px] tracking-[0.2em] uppercase py-4 hover:bg-[#333] transition-colors duration-200 font-medium"
-          >
-            {mode === "login" ? "Sign In" : "Create Account"}
-          </button>
-        </form>
-
-        {/* Divider */}
-        <div className="flex items-center gap-4 my-8">
-          <div className="flex-1 h-px bg-[#E8E4DE]" />
-          <span className="text-[11px] text-[#6B6B6B] tracking-widest">OR</span>
-          <div className="flex-1 h-px bg-[#E8E4DE]" />
-        </div>
-
-        {/* Trust note */}
-        <p className="text-center text-[11px] text-[#6B6B6B] leading-relaxed">
-          By continuing you agree to our{" "}
-          <span className="underline underline-offset-2 cursor-pointer hover:text-[#111] transition-colors">
-            Terms
-          </span>{" "}
-          &amp;{" "}
-          <span className="underline underline-offset-2 cursor-pointer hover:text-[#111] transition-colors">
-            Privacy Policy
-          </span>.
-        </p>
-      </div>
-    </div>
+    <AccountDashboard
+      email={user.email ?? ""}
+      fullName={profile?.full_name ?? ""}
+      phone={profile?.phone ?? ""}
+      addresses={(addresses as AddressRow[] | null) ?? []}
+      cards={(cards as PaymentMethodRow[] | null) ?? []}
+      orders={orders}
+      wishlist={wishlist}
+      initialTab={initialTab}
+    />
   );
 }

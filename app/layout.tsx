@@ -24,7 +24,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Viale — Luxury Scents, One Drop at a Time",
-  description: "Try 200+ niche and designer fragrances without the full-bottle commitment. Premium decants starting from $12.",
+  description: "Try 200+ niche and designer fragrances without the full-bottle commitment. Premium decants starting from ₹1,160.",
 };
 
 export default function RootLayout({

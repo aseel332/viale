@@ -6,12 +6,15 @@ import PriceRangeSlider from "./PriceRangeSlider";
 import {
   BRANDS, FAMILIES, GENDERS, SEASONS, FEATURED_NOTES,
   FilterState, MIN_PRICE, MAX_PRICE,
-} from "@/lib/products";
+} from "@/lib/product-utils";
 
 interface Props {
   filters:  FilterState;
   onChange: (f: FilterState) => void;
   onReset:  () => void;
+  brandOptions?: readonly string[];
+  noteOptions?: readonly string[];
+  priceBounds?: [number, number];
 }
 
 // ── Accordion section ─────────────────────────────────────────
@@ -85,8 +88,16 @@ function PillGroup({
 }
 
 // ── Main FilterPanel ──────────────────────────────────────────
-export default function FilterPanel({ filters, onChange, onReset }: Props) {
+export default function FilterPanel({
+  filters,
+  onChange,
+  onReset,
+  brandOptions = BRANDS,
+  noteOptions = FEATURED_NOTES,
+  priceBounds = [MIN_PRICE, MAX_PRICE],
+}: Props) {
   const [showAllNotes, setShowAllNotes] = useState(false);
+  const [minPrice, maxPrice] = priceBounds;
 
   const toggle = (field: keyof FilterState, value: string) => {
     const current = filters[field] as string[];
@@ -105,12 +116,12 @@ export default function FilterPanel({ filters, onChange, onReset }: Props) {
     filters.genders.length  > 0 ||
     filters.seasons.length  > 0 ||
     filters.minRating       > 0 ||
-    filters.priceRange[0]   > MIN_PRICE ||
-    filters.priceRange[1]   < MAX_PRICE;
+    filters.priceRange[0]   > minPrice ||
+    filters.priceRange[1]   < maxPrice;
 
   const displayedNotes = showAllNotes
-    ? FEATURED_NOTES
-    : FEATURED_NOTES.slice(0, 12);
+    ? noteOptions
+    : noteOptions.slice(0, 12);
 
   return (
     <div className="text-sm">
@@ -129,8 +140,9 @@ export default function FilterPanel({ filters, onChange, onReset }: Props) {
       {/* ── Price Range ─────────────────────── */}
       <Section title="Price Range" defaultOpen>
         <PriceRangeSlider
-          min={MIN_PRICE}
-          max={MAX_PRICE}
+          min={minPrice}
+          max={maxPrice}
+          step={50}
           value={filters.priceRange}
           onChange={(priceRange) => onChange({ ...filters, priceRange })}
         />
@@ -169,20 +181,22 @@ export default function FilterPanel({ filters, onChange, onReset }: Props) {
             );
           })}
         </div>
-        <button
-          onClick={() => setShowAllNotes((p) => !p)}
-          className="mt-3 text-[10px] tracking-[0.1em] uppercase text-[#6B6B6B] hover:text-[#111] transition-colors"
-        >
-          {showAllNotes
-            ? "Show less"
-            : `+ ${FEATURED_NOTES.length - 12} more notes`}
-        </button>
+        {noteOptions.length > 12 && (
+          <button
+            onClick={() => setShowAllNotes((p) => !p)}
+            className="mt-3 text-[10px] tracking-[0.1em] uppercase text-[#6B6B6B] hover:text-[#111] transition-colors"
+          >
+            {showAllNotes
+              ? "Show less"
+              : `+ ${noteOptions.length - 12} more notes`}
+          </button>
+        )}
       </Section>
 
       {/* ── Brand ───────────────────────────── */}
       <Section title="Brand" count={filters.brands.length || undefined}>
         <div className="space-y-2.5 max-h-52 overflow-y-auto pr-1">
-          {BRANDS.map((brand) => {
+          {brandOptions.map((brand) => {
             const checked = filters.brands.includes(brand);
             return (
               <button

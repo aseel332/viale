@@ -1,11 +1,19 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { SlidersHorizontal, X, ChevronDown } from "lucide-react";
 import {
-  PRODUCTS, DEFAULT_FILTERS, FilterState, SortOption, SORT_OPTIONS,
-  filterAndSort, countActiveFilters,
-} from "@/lib/products";
+  DEFAULT_FILTERS,
+  MIN_PRICE,
+  MAX_PRICE,
+  FilterState,
+  SortOption,
+  SORT_OPTIONS,
+  type Product,
+  effectiveBasePrice,
+  filterAndSort,
+  countActiveFilters,
+} from "@/lib/product-utils";
 import FilterPanel from "./FilterPanel";
 import ProductCard  from "./ProductCard";
 import { AnimateIn }    from "@/components/AnimateIn";
@@ -13,6 +21,7 @@ import { AnimateIn }    from "@/components/AnimateIn";
 interface Props {
   category?:   "all" | "men" | "women";
   maxVisible?: number;
+  products: Product[];
 }
 
 // ── Active filter chips ────────────────────────────────────────
@@ -123,25 +132,47 @@ function SortDropdown({
 }
 
 // ── ProductBrowser ─────────────────────────────────────────────
-export default function ProductBrowser({ category = "all", maxVisible }: Props) {
-  const [filters, setFilters]       = useState<FilterState>(DEFAULT_FILTERS);
+export default function ProductBrowser({ category = "all", maxVisible, products }: Props) {
+  const priceBounds = useMemo<[number, number]>(() => {
+    if (products.length === 0) return [MIN_PRICE, MAX_PRICE];
+    const prices = products.map(effectiveBasePrice);
+    const min = Math.min(MIN_PRICE, Math.floor(Math.min(...prices) / 50) * 50);
+    const max = Math.max(MAX_PRICE, Math.ceil(Math.max(...prices) / 50) * 50);
+    return min === max ? [Math.max(0, min - 50), max + 50] : [min, max];
+  }, [products]);
+
+  const defaultFilters = useMemo<FilterState>(
+    () => ({ ...DEFAULT_FILTERS, priceRange: priceBounds }),
+    [priceBounds],
+  );
+
+  const [filters, setFilters]       = useState<FilterState>(() => defaultFilters);
   const [sort, setSort]             = useState<SortOption>("featured");
   const [sheetOpen, setSheetOpen]   = useState(false);
   const [expanded, setExpanded]     = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
 
   // Base set filtered by route category
-  const base = PRODUCTS.filter((p) => {
+  const base = products.filter((p) => {
     if (category === "men")   return p.gender === "Men"   || p.gender === "Unisex";
     if (category === "women") return p.gender === "Women" || p.gender === "Unisex";
     return true;
   });
 
+  const brandOptions = useMemo(
+    () => [...new Set(base.map((product) => product.brand))].sort(),
+    [base],
+  );
+  const noteOptions = useMemo(
+    () => [...new Set(base.flatMap((product) => product.notes))].sort(),
+    [base],
+  );
+
   const results      = filterAndSort(base, filters, sort);
-  const activeCount  = countActiveFilters(filters);
+  const activeCount  = countActiveFilters(filters, priceBounds);
   const chips        = buildChips(filters, setFilters);
 
-  const resetFilters = useCallback(() => setFilters(DEFAULT_FILTERS), []);
+  const resetFilters = useCallback(() => setFilters(defaultFilters), [defaultFilters]);
 
   // maxVisible slicing
   const trimmed    = maxVisible && !expanded ? results.slice(0, maxVisible) : results;
@@ -230,6 +261,9 @@ export default function ProductBrowser({ category = "all", maxVisible }: Props) 
             filters={filters}
             onChange={setFilters}
             onReset={resetFilters}
+            brandOptions={brandOptions}
+            noteOptions={noteOptions}
+            priceBounds={priceBounds}
           />
         </aside>
 
@@ -256,15 +290,7 @@ export default function ProductBrowser({ category = "all", maxVisible }: Props) 
                     delay={Math.min(i, 7) * 50}
                     direction="up"
                   >
-                    <ProductCard
-                      name={product.name}
-                      brand={product.brand}
-                      price={product.price}
-                      rating={product.rating}
-                      imageSrc={product.imageSrc}
-                      tag={product.tag}
-                      notes={product.notes}
-                    />
+                    <ProductCard product={product} />
                   </AnimateIn>
                 ))}
               </div>
@@ -349,11 +375,14 @@ export default function ProductBrowser({ category = "all", maxVisible }: Props) 
 
             {/* Scrollable filter panel */}
             <div className="flex-1 overflow-y-auto px-5 pt-2 pb-24">
-              <FilterPanel
-                filters={filters}
-                onChange={setFilters}
-                onReset={resetFilters}
-              />
+                <FilterPanel
+                  filters={filters}
+                  onChange={setFilters}
+                  onReset={resetFilters}
+                  brandOptions={brandOptions}
+                  noteOptions={noteOptions}
+                  priceBounds={priceBounds}
+                />
             </div>
 
             {/* Show results button */}

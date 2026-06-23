@@ -1,10 +1,11 @@
 import Link from "next/link";
+import Logo from "./Logo";
 
 const shopLinks    = ["All", "Collections", "Men", "Women"];
 const companyLinks = ["About", "Our Story", "Authenticity"];
 const supportLinks = ["FAQ", "Shipping", "Returns", "Contact"];
 
-export default function Footer() {
+export default function Footer({ fromPrice }: { fromPrice: string }) {
   return (
     <footer className="bg-[#111111] text-white mt-24">
       {/* Trust strip */}
@@ -32,9 +33,11 @@ export default function Footer() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-10 md:gap-8">
           {/* Brand */}
           <div className="col-span-2 md:col-span-1">
-            <img src="/viale_logo_1.jpg" alt="Viale" className="h-8 object-contain mb-5 brightness-0 invert" />
+            <div className="mb-5">
+              <Logo variant="light" />
+            </div>
             <p className="text-white/50 text-sm leading-relaxed max-w-[220px]">
-              Discover luxury, one ml at a time. Premium decants starting at $12.
+              Discover luxury, one ml at a time. Premium decants from {fromPrice}.
             </p>
           </div>
 

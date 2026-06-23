@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, User, Menu, X } from "lucide-react";
+import { Search, User, Menu, X, ShoppingBag } from "lucide-react";
+import Logo from "./Logo";
 
 const navLinks = [
   { label: "All",         href: "/" },
@@ -12,7 +13,12 @@ const navLinks = [
   { label: "Women",       href: "/women" },
 ];
 
-export default function Navbar() {
+interface NavbarProps {
+  isSignedIn?: boolean;
+  cartCount?:  number;
+}
+
+export default function Navbar({ isSignedIn = false, cartCount = 0 }: NavbarProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [scrolled, setScrolled]     = useState(false);
   const pathname = usePathname();
@@ -25,7 +31,10 @@ export default function Navbar() {
   }, []);
 
   // Close drawer on navigation
-  useEffect(() => { setDrawerOpen(false); }, [pathname]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDrawerOpen(false), 0);
+    return () => window.clearTimeout(timer);
+  }, [pathname]);
 
   // Prevent body scroll when drawer open
   useEffect(() => {
@@ -57,13 +66,10 @@ export default function Navbar() {
           {/* Logo — centered on mobile, left on desktop */}
           <Link
             href="/"
+            aria-label="Viale — home"
             className="absolute left-1/2 -translate-x-1/2 md:static md:translate-x-0"
           >
-            <img
-              src="/viale_logo_1.jpg"
-              alt="Viale"
-              className="h-8 md:h-9 object-contain"
-            />
+            <Logo variant="dark" />
           </Link>
 
           {/* Desktop nav — center */}
@@ -92,11 +98,23 @@ export default function Navbar() {
                 className="text-[#111] hover:text-[#C9A86C] transition-colors"
               />
             </Link>
+            <Link href="/cart" aria-label="Shopping bag" className="relative">
+              <ShoppingBag
+                size={20}
+                strokeWidth={1.5}
+                className="text-[#111] hover:text-[#C9A86C] transition-colors"
+              />
+              {cartCount > 0 && (
+                <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#C9A86C] text-[#111] text-[9px] font-bold flex items-center justify-center">
+                  {cartCount > 9 ? "9+" : cartCount}
+                </span>
+              )}
+            </Link>
             <Link href="/account" aria-label="Account" className="hidden md:block">
               <User
                 size={20}
                 strokeWidth={1.5}
-                className="text-[#111] hover:text-[#C9A86C] transition-colors"
+                className={`transition-colors hover:text-[#C9A86C] ${isSignedIn ? "text-[#C9A86C]" : "text-[#111]"}`}
               />
             </Link>
           </div>
@@ -116,7 +134,7 @@ export default function Navbar() {
           <div className="absolute left-0 top-0 bottom-0 w-[80vw] max-w-xs bg-white flex flex-col animate-slide-in-left">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-5 border-b border-[#E8E4DE]">
-              <img src="/viale_logo_1.jpg" alt="Viale" className="h-7 object-contain" />
+              <Logo variant="dark" tagline={false} />
               <button onClick={() => setDrawerOpen(false)} aria-label="Close">
                 <X size={22} strokeWidth={1.5} className="text-[#111]" />
               </button>
@@ -143,11 +161,18 @@ export default function Navbar() {
                 Search
               </Link>
               <Link
+                href="/cart"
+                className="py-4 border-b border-[#F0EDE8] text-[11px] tracking-[0.18em] uppercase font-medium text-[#6B6B6B] hover:text-[#111] transition-colors flex items-center gap-2"
+              >
+                <ShoppingBag size={14} strokeWidth={1.5} />
+                Bag{cartCount > 0 ? ` (${cartCount})` : ""}
+              </Link>
+              <Link
                 href="/account"
                 className="py-4 text-[11px] tracking-[0.18em] uppercase font-medium text-[#6B6B6B] hover:text-[#111] transition-colors flex items-center gap-2"
               >
                 <User size={14} strokeWidth={1.5} />
-                Account
+                {isSignedIn ? "My Account" : "Sign In"}
               </Link>
             </nav>
 
@@ -164,4 +189,3 @@ export default function Navbar() {
     </>
   );
 }
-

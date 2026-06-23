@@ -3,13 +3,11 @@ import ProductCard from "@/components/shopping/ProductCard";
 import CollectionCard from "@/components/shopping/CollectionCard";
 import { AnimateIn } from "@/components/AnimateIn";
 import ProductBrowser from "@/components/shopping/ProductBrowser";
+import { effectiveBasePrice, formatPrice } from "@/lib/product-utils";
+import { getStorefrontProducts } from "@/lib/catalog";
 
 // ── Seed data ────────────────────────────────────────────────
-const topPicks = [
-  { name: "Sauvage",         brand: "Dior",      price: "$18", rating: "4.9", imageSrc: "/top_1.png", tag: "Bestseller" },
-  { name: "Tobacco Vanille", brand: "Tom Ford",  price: "$24", rating: "4.8", imageSrc: "/top_2.png", tag: "Top Pick"   },
-  { name: "Aventus",         brand: "Creed",     price: "$30", rating: "4.9", imageSrc: "/top_3.png", tag: "Iconic"     },
-];
+const topPickIds = ["sauvage-dior", "tobacco-vanille-tf", "aventus-creed"];
 
 const collections = [
   {
@@ -35,15 +33,25 @@ const collections = [
   },
 ];
 
-const whyItems = [
+function buildWhyItems(fromPrice: string) {
+  return [
   { icon: "✦", title: "100% Authentic",           body: "Every decant is sourced directly from sealed full-size bottles. Never a fake."              },
-  { icon: "◈", title: "Try Before You Commit",     body: "Sample any luxury scent from $12. No blind-buying, no regret."                             },
+  { icon: "◈", title: "Try Before You Commit",     body: `Sample any luxury scent from ${fromPrice}. No blind-buying, no regret.`                  },
   { icon: "◉", title: "200+ Luxury Brands",        body: "Dior, Creed, Tom Ford, MFK and hundreds more — all in one place."                         },
   { icon: "◇", title: "Ships in 24 Hours",         body: "Discreet, secure packaging. Your order is out the door the next day."                      },
-];
+  ];
+}
 
 // ── Page ─────────────────────────────────────────────────────
-export default function Home() {
+export default async function Home() {
+  const products = await getStorefrontProducts();
+  const lowestBasePrice = products.length > 0 ? Math.min(...products.map(effectiveBasePrice)) : 0;
+  const fromPrice = formatPrice(lowestBasePrice);
+  const whyItems = buildWhyItems(fromPrice);
+  const topPicks = topPickIds
+    .map((id) => products.find((p) => p.id === id))
+    .filter((p): p is (typeof products)[number] => Boolean(p));
+
   return (
     <>
       {/* HERO */}
@@ -91,7 +99,7 @@ export default function Home() {
             style={{ animationDelay: "0.4s" }}
           >
             Try 200+ niche and designer fragrances without the full-bottle commitment.{" "}
-            Starting from <span className="text-[#111] font-medium">$12</span>.
+            Starting from <span className="text-[#111] font-medium">{fromPrice}</span>.
           </p>
 
           <div
@@ -99,7 +107,7 @@ export default function Home() {
             style={{ animationDelay: "0.5s" }}
           >
             <Link
-              href="/"
+              href="/#all-decants"
               className="flex-1 bg-[#111] text-white text-[11px] tracking-[0.2em] uppercase py-4 text-center hover:bg-[#333] transition-colors duration-200"
             >
               Shop Now
@@ -123,7 +131,7 @@ export default function Home() {
             </div>
             <div className="w-px h-8 bg-[#E8E4DE]" />
             <div className="text-center">
-              <p className="text-xl font-[family-name:var(--font-cormorant)] font-medium text-[#111]">$12</p>
+              <p className="text-xl font-[family-name:var(--font-cormorant)] font-medium text-[#111]">{fromPrice}</p>
               <p className="text-[9px] tracking-[0.2em] uppercase text-[#6B6B6B]">From</p>
             </div>
             <div className="w-px h-8 bg-[#E8E4DE]" />
@@ -157,11 +165,11 @@ export default function Home() {
               style={{ animationDelay: "0.3s" }}
             >
               Try 200+ niche and designer fragrances without the full-bottle commitment.
-              Starting from <span className="text-[#111] font-medium">$12</span>.
+              Starting from <span className="text-[#111] font-medium">{fromPrice}</span>.
             </p>
             <div className="flex gap-3 animate-fade-in" style={{ animationDelay: "0.45s" }}>
               <Link
-                href="/"
+                href="/#all-decants"
                 className="bg-[#111] text-white text-[11px] tracking-[0.2em] uppercase px-8 py-4 hover:bg-[#333] transition-colors duration-200"
               >
                 Shop Now
@@ -180,7 +188,7 @@ export default function Home() {
               </div>
               <div className="w-px h-8 bg-[#E8E4DE]" />
               <div className="text-center">
-                <p className="text-xl font-[family-name:var(--font-cormorant)] font-medium text-[#111]">$12</p>
+                <p className="text-xl font-[family-name:var(--font-cormorant)] font-medium text-[#111]">{fromPrice}</p>
                 <p className="text-[9px] tracking-[0.2em] uppercase text-[#6B6B6B]">From</p>
               </div>
               <div className="w-px h-8 bg-[#E8E4DE]" />
@@ -210,14 +218,14 @@ export default function Home() {
             <p className="text-[10px] tracking-[0.25em] uppercase text-[#C9A86C] mb-2">Curated For You</p>
             <h2 className="text-3xl md:text-4xl font-[family-name:var(--font-cormorant)] font-medium italic text-[#111]">Most Loved</h2>
           </div>
-          <Link href="/" className="text-[10px] tracking-[0.2em] uppercase text-[#6B6B6B] hover:text-[#111] transition-colors hidden sm:block">
+          <Link href="/#all-decants" className="text-[10px] tracking-[0.2em] uppercase text-[#6B6B6B] hover:text-[#111] transition-colors hidden sm:block">
             View All →
           </Link>
         </AnimateIn>
         <div className="flex gap-4 overflow-x-auto scrollbar-none pb-2 md:grid md:grid-cols-3 md:gap-8 md:overflow-visible md:pb-0">
           {topPicks.map((p, i) => (
-            <AnimateIn key={p.name} delay={i * 80} className="min-w-[62vw] sm:min-w-[45vw] md:min-w-0">
-              <ProductCard {...p} />
+            <AnimateIn key={p.id} delay={i * 80} className="min-w-[62vw] sm:min-w-[45vw] md:min-w-0">
+              <ProductCard product={p} />
             </AnimateIn>
           ))}
         </div>
@@ -260,7 +268,7 @@ export default function Home() {
       </section>
 
       {/* ALL PRODUCTS — ProductBrowser */}
-      <section className="bg-white py-20 md:py-28">
+      <section id="all-decants" className="bg-white py-20 md:py-28 scroll-mt-20">
         <div className="max-w-screen-xl mx-auto px-5 md:px-10">
           <AnimateIn className="flex justify-between items-end mb-10">
             <div>
@@ -268,7 +276,7 @@ export default function Home() {
               <h2 className="text-3xl md:text-4xl font-[family-name:var(--font-cormorant)] font-medium italic text-[#111]">All Decants</h2>
             </div>
           </AnimateIn>
-          <ProductBrowser maxVisible={8} />
+          <ProductBrowser maxVisible={8} products={products} />
         </div>
       </section>
 
@@ -282,7 +290,7 @@ export default function Home() {
           <p className="text-white/50 text-sm max-w-sm mx-auto mb-10">
             Explore 200+ luxury fragrances. Try them all. Fall in love with one.
           </p>
-          <Link href="/" className="inline-block bg-[#C9A86C] text-[#111] text-[11px] tracking-[0.2em] uppercase px-10 py-4 hover:bg-[#E8D5A3] transition-colors duration-200 font-medium">
+          <Link href="/#all-decants" className="inline-block bg-[#C9A86C] text-[#111] text-[11px] tracking-[0.2em] uppercase px-10 py-4 hover:bg-[#E8D5A3] transition-colors duration-200 font-medium">
             Start Exploring
           </Link>
         </AnimateIn>

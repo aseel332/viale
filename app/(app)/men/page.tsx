@@ -1,7 +1,10 @@
 import { AnimateIn } from "@/components/AnimateIn";
 import ProductBrowser from "@/components/shopping/ProductBrowser";
+import { getStorefrontProducts } from "@/lib/catalog";
 
-export default function MenPage() {
+export default async function MenPage() {
+  const products = await getStorefrontProducts();
+
   return (
     <>
       <div className="pt-28 pb-12 md:pb-16 bg-[#FAFAF8] border-b border-[#E8E4DE]">
@@ -20,10 +23,9 @@ export default function MenPage() {
 
       <section className="bg-white py-16 md:py-20">
         <div className="max-w-screen-xl mx-auto px-5 md:px-10">
-          <ProductBrowser category="men" />
+          <ProductBrowser category="men" products={products} />
         </div>
       </section>
     </>
   );
 }
-

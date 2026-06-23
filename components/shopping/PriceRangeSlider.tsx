@@ -1,5 +1,7 @@
 "use client";
 
+import { formatPrice } from "@/lib/product-utils";
+
 interface Props {
   min:      number;
   max:      number;
@@ -34,11 +36,11 @@ export default function PriceRangeSlider({
       <div className="flex justify-between mb-5">
         <div className="text-center">
           <p className="text-[9px] tracking-[0.15em] uppercase text-[#6B6B6B] mb-0.5">From</p>
-          <p className="text-sm font-semibold text-[#111]">${lo}</p>
+          <p className="text-sm font-semibold text-[#111]">{formatPrice(lo)}</p>
         </div>
         <div className="text-center">
           <p className="text-[9px] tracking-[0.15em] uppercase text-[#6B6B6B] mb-0.5">To</p>
-          <p className="text-sm font-semibold text-[#111]">${hi}</p>
+          <p className="text-sm font-semibold text-[#111]">{formatPrice(hi)}</p>
         </div>
       </div>
 
@@ -78,8 +80,8 @@ export default function PriceRangeSlider({
 
       {/* Min / Max labels */}
       <div className="flex justify-between mt-2">
-        <span className="text-[9px] text-[#6B6B6B]">${min}</span>
-        <span className="text-[9px] text-[#6B6B6B]">${max}</span>
+        <span className="text-[9px] text-[#6B6B6B]">{formatPrice(min)}</span>
+        <span className="text-[9px] text-[#6B6B6B]">{formatPrice(max)}</span>
       </div>
     </div>
   );

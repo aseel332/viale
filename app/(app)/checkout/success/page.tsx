@@ -1,0 +1,76 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { Check } from "lucide-react";
+import { createClient } from "@/lib/supabase/server";
+import { formatPrice } from "@/lib/product-utils";
+
+export const metadata = { title: "Order Confirmed — Viale" };
+
+export default async function CheckoutSuccessPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ order?: string }>;
+}) {
+  const { order: orderId } = await searchParams;
+  if (!orderId) redirect("/");
+
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect("/account");
+
+  const { data: order } = await supabase
+    .from("orders")
+    .select("id, total_amount, created_at, status")
+    .eq("id", orderId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!order) redirect("/");
+
+  return (
+    <div className="min-h-screen bg-[#FAFAF8] pt-28 pb-20 flex items-start justify-center">
+      <div className="max-w-md w-full px-5 text-center">
+        <div className="w-14 h-14 rounded-full bg-[#EAF4EA] flex items-center justify-center mx-auto mb-6">
+          <Check size={26} className="text-[#3A7A3A]" />
+        </div>
+        <p className="text-[10px] tracking-[0.25em] uppercase text-[#C9A86C] mb-2">Thank You</p>
+        <h1 className="text-4xl font-[family-name:var(--font-cormorant)] font-medium italic text-[#111] mb-4">
+          Order Confirmed
+        </h1>
+        <p className="text-[14px] text-[#4A4A4A] leading-relaxed mb-8">
+          We&apos;ve received your order and it ships within 24 hours. A confirmation has been sent to your email.
+        </p>
+
+        <div className="bg-white border border-[#E8E4DE] p-6 text-left space-y-3 mb-8">
+          <div className="flex justify-between text-[13px]">
+            <span className="text-[#6B6B6B]">Order number</span>
+            <span className="text-[#111] font-medium">#{order.id.slice(0, 8).toUpperCase()}</span>
+          </div>
+          <div className="flex justify-between text-[13px]">
+            <span className="text-[#6B6B6B]">Total</span>
+            <span className="text-[#111] font-medium tabular-nums">{formatPrice(Number(order.total_amount))}</span>
+          </div>
+          <div className="flex justify-between text-[13px]">
+            <span className="text-[#6B6B6B]">Status</span>
+            <span className="text-[#111] font-medium capitalize">{order.status}</span>
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <Link
+            href="/account?tab=orders"
+            className="flex-1 bg-[#111] text-white text-[11px] tracking-[0.2em] uppercase py-3.5 hover:bg-[#333] transition-colors"
+          >
+            View Orders
+          </Link>
+          <Link
+            href="/"
+            className="flex-1 border border-[#111] text-[#111] text-[11px] tracking-[0.2em] uppercase py-3.5 hover:bg-[#111] hover:text-white transition-colors"
+          >
+            Keep Shopping
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
