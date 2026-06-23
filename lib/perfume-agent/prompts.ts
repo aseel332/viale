@@ -38,6 +38,7 @@ Important rules:
 - Do not copy user reviews or editorial descriptions verbatim. Summarize review sentiment in your own words.
 - If facts conflict, choose the most reliable source and mention uncertainty in missingFields.
 - Price must not be generated. Pricing is handled manually by the admin dashboard.
+- Try to find a direct, hot-linkable photo URL (ending in a real image extension, from the official brand site or a major retailer such as Sephora, Nordstrom, FragranceX, or Macy's) showing the actual retail bottle for this product. Put it in bottleImageUrl. Only return a URL you are confident points directly to an image file; if you cannot find one, set bottleImageUrl to null. Never invent a URL.
 - Convert the fragrance into Viale's allowed website values:
   - family: Fresh, Floral, Woody, Oriental, Gourmand, or Chypre
   - gender: Men, Women, or Unisex
@@ -54,15 +55,35 @@ Important rules:
 `;
 }
 
-export function imagePrompt(brand: string, name: string, visualHints: string[]) {
-  return `
-Create a square ecommerce product image on a clean white background.
-Top text: "${brand} ${name}" in elegant small black catalog typography.
-Main subject: the recognizable retail perfume bottle for ${brand} ${name} on the left and the Viale decant atomizer from the reference image on the right.
-Decant: keep the Viale bottle shape, black sprayer, clear glass, and label style from the reference image. Fill the decant with liquid color matching the fragrance or retail bottle color.
-Composition: both bottles side by side, full objects visible, centered, generous padding, no cropping.
+// Fixed studio rules every generated product image must follow, regardless of which
+// perfume is being rendered. Keep this constant instead of re-deriving layout per call.
+// Canvas is a tall 3:4 portrait to match the storefront's product card aspect ratio.
+export const STUDIO_LAYOUT_PROMPT = `
+Create a tall 3:4 portrait ecommerce product image on a clean, pure white background.
+Layout:
+- Top-left corner: the perfume brand name in elegant catalog typography, with the perfume name set directly beneath it in a smaller line. No logo, icon, or other mark — just this text.
+- Right side of the frame, vertically centered: the two bottles, large and close together as a single confident pair — sized so each bottle fills roughly two-thirds of the available height on that side. Keep modest padding so neither bottle touches the edge of the frame, but do not shrink them down or leave large empty gaps around them.
+  - Of the pair, the recognizable retail bottle goes on the left and the Viale decant atomizer from "Reference image 1" goes on the right, standing close enough together to read as one product grouping.
+- Leave the lower-left/centre area mostly empty white space; do not add any other text, props, or people.
+Decant: replicate the exact bottle shape, black sprayer, clear glass, and label style from "Reference image 1". Fill the decant's liquid with a color matching the fragrance.
 Style: premium photorealistic studio product photography, soft shadows, crisp glass reflections.
-Visual hints: ${visualHints.length ? visualHints.join(", ") : "use publicly known bottle shape, color, cap, and material cues at a high level"}.
-Constraints: no watermarks, no extra props, no people, do not copy trademarked label artwork exactly; make the retail bottle recognizable by silhouette, color, cap, and material cues.
+Constraints: no watermarks, no extra props, no people.
+`;
+
+export function imagePrompt(
+  brand: string,
+  name: string,
+  visualHints: string[],
+  hasBottleReference: boolean,
+) {
+  return `
+${STUDIO_LAYOUT_PROMPT}
+
+This image is for: ${brand} ${name}.
+Top-left text: "${brand}" rendered in typography that evokes ${brand}'s own real logo/label style, with "${name}" in a smaller line beneath it.
+Retail bottle: ${hasBottleReference
+    ? `"Reference image 2" is an actual, current product photo of this exact bottle. Treat it as ground truth and reproduce it as faithfully as possible — same bottle silhouette and proportions, same cap shape and color, same glass tone, same label text, layout, and placement. Only change the camera angle, lighting, and background to match this studio scene; do not redesign, restyle, simplify, or guess at any part of the bottle that is visible in the reference.`
+    : `no reference photo was found, so use publicly known bottle shape, color, cap, and material cues at a high level.`}
+Visual hints: ${visualHints.length ? visualHints.join(", ") : "none beyond the above"}.
 `;
 }

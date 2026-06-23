@@ -16,8 +16,10 @@ import type {
 
 const DEFAULT_RESEARCH_MODEL = "gpt-5-mini";
 const DEFAULT_IMAGE_MODEL = "gpt-image-1.5";
+const DEFAULT_IMAGE_SIZE = "1024x1536"; // 2:3 portrait — closest native size to the storefront's 3:4 product card
+const DEFAULT_IMAGE_QUALITY = "high"; // bottle-label fidelity matters more than generation cost here
 const DEFAULT_SEARCH_CONTEXT_SIZE = "low";
-const DEFAULT_DISCOVERY_MAX_OUTPUT_TOKENS = 1500;
+const DEFAULT_DISCOVERY_MAX_OUTPUT_TOKENS = 2200;
 const DEFAULT_RESEARCH_MAX_OUTPUT_TOKENS = 4200;
 const DEFAULT_DISCOVERY_BATCH_LIMIT = 6;
 
@@ -174,6 +176,7 @@ function toDraft(research: PerfumeResearch, imageSrc: string, imagePromptText: s
       popularitySignals: research.popularitySignals,
       confidence: research.confidence,
       missingFields: research.missingFields,
+      bottleImageUrl: research.bottleImageUrl,
       imagePrompt: imagePromptText,
     },
   };
@@ -203,15 +206,22 @@ export async function discoverPerfumes(input: DiscoverPerfumeInput = {}): Promis
     "OPENAI_DISCOVERY_MAX_OUTPUT_TOKENS",
     DEFAULT_DISCOVERY_MAX_OUTPUT_TOKENS,
     900,
-    2600,
+    4500,
   );
 
   let parsed: { items: PerfumeDiscoveryItem[] };
   try {
     parsed = parseJson(await createResponse(limit, maxOutputTokens));
   } catch (error) {
-    if (limit <= 3) throw error;
-    parsed = parseJson(await createResponse(Math.max(2, Math.ceil(limit / 2)), Math.min(2600, maxOutputTokens + 600)));
+    if (!isRetryableStructuredOutputError(error)) throw error;
+    const retryLimit = Math.max(2, Math.ceil(limit / 2));
+    const retryTokens = Math.min(4500, maxOutputTokens + 1200);
+    try {
+      parsed = parseJson(await createResponse(retryLimit, retryTokens));
+    } catch (retryError) {
+      if (!isRetryableStructuredOutputError(retryError) || retryLimit <= 2) throw retryError;
+      parsed = parseJson(await createResponse(2, Math.min(4500, retryTokens + 1200)));
+    }
   }
 
   return parsed.items.slice(0, limit);
@@ -268,33 +278,66 @@ async function decantReferenceFile() {
   return toFile(buffer, "viale_decant.png", { type: "image/png" });
 }
 
+const MAX_BOTTLE_REFERENCE_BYTES = 8 * 1024 * 1024;
+
+async function fetchBottleReferenceFile(url: string | null) {
+  if (!url) return null;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeout);
+
+    if (!response.ok) return null;
+
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.startsWith("image/")) return null;
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.byteLength === 0 || buffer.byteLength > MAX_BOTTLE_REFERENCE_BYTES) return null;
+
+    const extension = contentType.split("/")[1]?.split(";")[0] || "jpg";
+    return toFile(buffer, `retail-bottle.${extension}`, { type: contentType });
+  } catch (error) {
+    console.warn(`Could not fetch bottle reference image from ${url}:`, error);
+    return null;
+  }
+}
+
 export async function generatePerfumeImage(
   research: PerfumeResearch,
   saveImage?: GeneratePerfumeInput["saveImage"],
 ) {
   const client = getOpenAI();
   const slug = slugifyPerfume(research.brand, research.name);
+  const useReferences = process.env.OPENAI_IMAGE_USE_DECANT_REFERENCE !== "false";
+  const bottleReference = useReferences ? await fetchBottleReferenceFile(research.bottleImageUrl) : null;
+
   const prompt = imagePrompt(research.brand, research.name, [
     research.concentration ?? "",
     research.family,
     ...research.notes.slice(0, 5),
-  ].filter(Boolean));
+  ].filter(Boolean), Boolean(bottleReference));
 
   const imageParams = {
     model: process.env.OPENAI_IMAGE_MODEL ?? DEFAULT_IMAGE_MODEL,
     prompt,
-    size: "1024x1024" as const,
-    quality: "medium" as const,
+    size: (process.env.OPENAI_IMAGE_SIZE ?? DEFAULT_IMAGE_SIZE) as "1024x1024" | "1024x1536" | "1536x1024",
+    quality: (process.env.OPENAI_IMAGE_QUALITY ?? DEFAULT_IMAGE_QUALITY) as "low" | "medium" | "high" | "auto",
     output_format: "png" as const,
     background: "opaque" as const,
     n: 1,
   };
 
-  const response = process.env.OPENAI_IMAGE_USE_DECANT_REFERENCE === "false"
+  const response = !useReferences
     ? await client.images.generate(imageParams)
     : await client.images.edit({
         ...imageParams,
-        image: await decantReferenceFile(),
+        image: [
+          await decantReferenceFile(),
+          ...(bottleReference ? [bottleReference] : []),
+        ],
         input_fidelity: "high",
       });
 

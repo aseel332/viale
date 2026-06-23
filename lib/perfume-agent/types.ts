@@ -26,6 +26,7 @@ export type PerfumeResearch = {
   topNotes: string[];
   middleNotes: string[];
   baseNotes: string[];
+  bottleImageUrl: string | null;
   description: string;
   longDescription: string;
   ratingEstimate: number;
@@ -64,6 +65,7 @@ export type PerfumeDraftProduct = {
     sources: ImportSource[];
     reviewSummary: string;
     reviewCountEstimate: number | null;
+    bottleImageUrl: string | null;
     popularitySignals: string[];
     confidence: number;
     missingFields: string[];
