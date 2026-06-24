@@ -28,12 +28,46 @@ export function priceForSize(basePrice: number, size: BottleSize): number {
   return Math.round((basePrice * SIZE_MULTIPLIERS[size]) / 10) * 10;
 }
 
+// Optional admin-set price/discount for a single bottle size.
+export type SizePriceEntry = { price?: number | null; discount?: number | null };
+export type SizePricing = Partial<Record<BottleSize, SizePriceEntry>>;
+
+/**
+ * Resolve the price for a given bottle size.
+ * Prefers an explicit per-size override (set in the admin dashboard) and falls
+ * back to the legacy multiplier model derived from the product's base price so
+ * older products without overrides keep working.
+ *
+ * Returns the `price` to charge, the `original` (pre-discount) price for
+ * strike-through display, and whether a discount applies for this size.
+ */
+export function resolveSizePrice(
+  product: Pick<Product, "price" | "discountPrice" | "sizePricing">,
+  size: BottleSize,
+): { price: number; original: number; hasDiscount: boolean } {
+  const override = product.sizePricing?.[size];
+  if (override && typeof override.price === "number" && override.price > 0) {
+    const original = override.price;
+    const discount =
+      typeof override.discount === "number" && override.discount > 0 && override.discount < original
+        ? override.discount
+        : null;
+    return { price: discount ?? original, original, hasDiscount: discount != null };
+  }
+
+  // Legacy fallback: scale the base price by the size multiplier.
+  const original = priceForSize(product.price, size);
+  const price = priceForSize(effectiveBasePrice(product), size);
+  return { price, original, hasDiscount: price < original };
+}
+
 export interface Product {
   id: string;
   name: string;
   brand: string;
   price: number;
   discountPrice?: number | null;
+  sizePricing?: SizePricing | null;
   rating: number;
   imageSrc: string;
   tag?: string;

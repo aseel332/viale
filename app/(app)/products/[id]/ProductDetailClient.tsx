@@ -6,8 +6,7 @@ import { useRouter } from "next/navigation";
 import { Heart, ShoppingBag, ChevronDown, ChevronUp, Check } from "lucide-react";
 import {
   BOTTLE_SIZES,
-  effectiveBasePrice,
-  priceForSize,
+  resolveSizePrice,
   formatPrice,
   type BottleSize,
   type Product,
@@ -76,10 +75,10 @@ export default function ProductDetailClient({ product, reviews, isSignedIn, user
   const [reviewSuccess, setReviewSuccess] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  const basePrice = effectiveBasePrice(product);
-  const hasDiscount = basePrice < product.price;
-  const displayPrice = priceForSize(basePrice, selectedSize);
-  const originalDisplayPrice = priceForSize(product.price, selectedSize);
+  const selectedPricing = resolveSizePrice(product, selectedSize);
+  const hasDiscount = selectedPricing.hasDiscount;
+  const displayPrice = selectedPricing.price;
+  const originalDisplayPrice = selectedPricing.original;
 
   function handleAddToCart() {
     if (!isSignedIn) {
@@ -99,18 +98,15 @@ export default function ProductDetailClient({ product, reviews, isSignedIn, user
   }
 
   function handleBuyNow() {
+    // Buy Now is a direct purchase of *this* product+size — it must not pull the
+    // rest of the cart into checkout, so route straight to a single-item checkout
+    // without adding anything to the persistent cart.
+    const target = `/checkout?buyNow=${encodeURIComponent(product.id)}&size=${selectedSize}`;
     if (!isSignedIn) {
-      window.location.href = "/account?redirectTo=/products/" + product.id;
+      window.location.href = "/account?redirectTo=" + encodeURIComponent(target);
       return;
     }
-    startTransition(async () => {
-      const result = await addCartItem({ itemType: "product", productId: product.id, sizeMl: selectedSize, quantity: 1 });
-      if (result.status === 401) {
-        window.location.href = "/account?redirectTo=/products/" + product.id;
-        return;
-      }
-      router.push("/checkout");
-    });
+    router.push(target);
   }
 
   function handleWishlist() {
@@ -266,8 +262,9 @@ export default function ProductDetailClient({ product, reviews, isSignedIn, user
             </p>
             <div className="flex gap-3">
               {BOTTLE_SIZES.map((size) => {
-                const sizePrice = priceForSize(basePrice, size);
-                const originalSizePrice = priceForSize(product.price, size);
+                const sizePricing = resolveSizePrice(product, size);
+                const sizePrice = sizePricing.price;
+                const originalSizePrice = sizePricing.original;
                 const isSelected = selectedSize === size;
                 return (
                   <button
@@ -282,7 +279,7 @@ export default function ProductDetailClient({ product, reviews, isSignedIn, user
                     <span className="text-[15px] font-semibold">{size}ml</span>
                     <span className={`text-[11px] mt-1 ${isSelected ? "text-white/70" : "text-[#6B6B6B]"}`}>
                       {formatPrice(sizePrice)}
-                      {hasDiscount && (
+                      {sizePricing.hasDiscount && (
                         <span className="ml-1 line-through opacity-70">
                           {formatPrice(originalSizePrice)}
                         </span>
@@ -345,7 +342,7 @@ export default function ProductDetailClient({ product, reviews, isSignedIn, user
 
           {/* Shipping note */}
           <p className="text-[11px] text-[#6B6B6B] leading-relaxed border-l-2 border-[#C9A86C] pl-3">
-            Ships within 24 hours · Secure, discreet packaging · 100% authentic
+            Delivery in 4–10 days · Secure, discreet packaging · 100% authentic
           </p>
 
           {/* Long description accordion */}

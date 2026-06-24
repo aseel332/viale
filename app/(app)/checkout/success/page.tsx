@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Check } from "lucide-react";
+import { Check, Clock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { formatPrice } from "@/lib/product-utils";
+import { DELIVERY_ESTIMATE } from "@/lib/shipping";
 
 export const metadata = { title: "Order Confirmed — Viale" };
 
@@ -20,12 +21,22 @@ export default async function CheckoutSuccessPage({
 
   const { data: order } = await supabase
     .from("orders")
-    .select("id, total_amount, created_at, status")
+    .select("id, total_amount, created_at, status, payment_method, payment_status, contact_phone, shipping_address")
     .eq("id", orderId)
     .eq("user_id", user.id)
     .maybeSingle();
 
   if (!order) redirect("/");
+
+  const shippingAddress = order.shipping_address as { full_name?: string } | null;
+  const recipientName = shippingAddress?.full_name ?? "";
+  const contactPhone = order.contact_phone ?? "";
+  const isCod = order.payment_method === "cod";
+  const paidLine = isCod
+    ? "Pay in cash when your order arrives."
+    : order.payment_status === "paid"
+      ? "Your payment was received."
+      : "We're confirming your payment.";
 
   return (
     <div className="min-h-screen bg-[#FAFAF8] pt-28 pb-20 flex items-start justify-center">
@@ -37,8 +48,11 @@ export default async function CheckoutSuccessPage({
         <h1 className="text-4xl font-[family-name:var(--font-cormorant)] font-medium italic text-[#111] mb-4">
           Order Confirmed
         </h1>
-        <p className="text-[14px] text-[#4A4A4A] leading-relaxed mb-8">
-          We&apos;ve received your order and it ships within 24 hours. A confirmation has been sent to your email.
+        <p className="text-[14px] text-[#4A4A4A] leading-relaxed mb-2">
+          We&apos;ve received your order. {paidLine} A confirmation has been sent to your email.
+        </p>
+        <p className="inline-flex items-center gap-2 text-[12px] text-[#6B6B6B] mb-8">
+          <Clock size={14} /> Delivery in {DELIVERY_ESTIMATE}
         </p>
 
         <div className="bg-white border border-[#E8E4DE] p-6 text-left space-y-3 mb-8">
@@ -46,9 +60,25 @@ export default async function CheckoutSuccessPage({
             <span className="text-[#6B6B6B]">Order number</span>
             <span className="text-[#111] font-medium">#{order.id.slice(0, 8).toUpperCase()}</span>
           </div>
+          {recipientName && (
+            <div className="flex justify-between text-[13px]">
+              <span className="text-[#6B6B6B]">Name</span>
+              <span className="text-[#111] font-medium">{recipientName}</span>
+            </div>
+          )}
+          {contactPhone && (
+            <div className="flex justify-between text-[13px]">
+              <span className="text-[#6B6B6B]">Phone</span>
+              <span className="text-[#111] font-medium">{contactPhone}</span>
+            </div>
+          )}
           <div className="flex justify-between text-[13px]">
             <span className="text-[#6B6B6B]">Total</span>
             <span className="text-[#111] font-medium tabular-nums">{formatPrice(Number(order.total_amount))}</span>
+          </div>
+          <div className="flex justify-between text-[13px]">
+            <span className="text-[#6B6B6B]">Payment</span>
+            <span className="text-[#111] font-medium">{isCod ? "Cash on Delivery" : "Paid online"}</span>
           </div>
           <div className="flex justify-between text-[13px]">
             <span className="text-[#6B6B6B]">Status</span>
@@ -58,10 +88,10 @@ export default async function CheckoutSuccessPage({
 
         <div className="flex gap-3">
           <Link
-            href="/account?tab=orders"
+            href={`/account/orders/${order.id}`}
             className="flex-1 bg-[#111] text-white text-[11px] tracking-[0.2em] uppercase py-3.5 hover:bg-[#333] transition-colors"
           >
-            View Orders
+            Track Order
           </Link>
           <Link
             href="/"

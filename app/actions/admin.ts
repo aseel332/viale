@@ -29,7 +29,9 @@ import type {
   ProductInsert,
   Season,
   SeasonCategory,
+  SizePricingMap,
 } from "@/types/database";
+import { BOTTLE_SIZES } from "@/lib/product-utils";
 
 export type AdminActionState = {
   error?: string;
@@ -75,14 +77,49 @@ function parseRequiredPrice(formData: FormData, name: string, label: string) {
   return parsePrice(requiredField(formData, name, label), label);
 }
 
-function parseOptionalDiscount(formData: FormData, price: number) {
-  const raw = field(formData, "discount_price");
-  if (!raw) return null;
+// Reads per-size price/discount fields (price_5, discount_5, price_10, …) from a
+// product form. The 5ml price is required and becomes the product's base price
+// (used for catalogue sorting/filtering); any size left blank simply isn't
+// overridden and falls back to the multiplier model on the storefront.
+function parseSizePricing(formData: FormData): {
+  basePrice: number;
+  baseDiscount: number | null;
+  sizePricing: SizePricingMap;
+} {
+  const sizePricing: SizePricingMap = {};
+  let basePrice = 0;
+  let baseDiscount: number | null = null;
 
-  const discount = parsePrice(raw, "Discount price");
-  if (discount <= 0) return null;
-  if (discount >= price) throw new Error("Discount price must be lower than the base price.");
-  return discount;
+  for (const size of BOTTLE_SIZES) {
+    const key = String(size) as "5" | "10" | "30";
+    // 5ml also accepts the legacy `price`/`discount_price` field names.
+    const rawPrice = field(formData, `price_${size}`) || (size === 5 ? field(formData, "price") : "");
+    const rawDiscount =
+      field(formData, `discount_${size}`) || (size === 5 ? field(formData, "discount_price") : "");
+
+    const price = rawPrice ? parsePrice(rawPrice, `${size}ml price`) : null;
+    const discount = rawDiscount ? parsePrice(rawDiscount, `${size}ml discount`) : null;
+    const validDiscount = discount != null && discount > 0 ? discount : null;
+
+    if (validDiscount != null && price != null && validDiscount >= price) {
+      throw new Error(`${size}ml discount must be lower than its price.`);
+    }
+
+    if (price != null || validDiscount != null) {
+      sizePricing[key] = {
+        price: price ?? undefined,
+        discount: validDiscount ?? undefined,
+      };
+    }
+
+    if (size === 5) {
+      if (price == null) throw new Error("5ml price is required.");
+      basePrice = price;
+      baseDiscount = validDiscount;
+    }
+  }
+
+  return { basePrice, baseDiscount, sizePricing };
 }
 
 function parseRating(raw: string) {
@@ -423,8 +460,7 @@ export async function approvePerfumeCandidateAdmin(formData: FormData) {
 export async function publishImportAdmin(formData: FormData) {
   const { supabase } = await requireAdmin();
   const importId = requiredField(formData, "import_id", "Import id");
-  const price = parseRequiredPrice(formData, "price", "Price");
-  const discountPrice = parseOptionalDiscount(formData, price);
+  const { basePrice, baseDiscount, sizePricing } = parseSizePricing(formData);
 
   const { data: importRow, error: importError } = await supabase
     .from("perfume_imports")
@@ -445,8 +481,9 @@ export async function publishImportAdmin(formData: FormData) {
     id,
     name: candidate.name || importRow.product_name,
     brand: candidate.brand || importRow.brand,
-    price,
-    discount_price: discountPrice,
+    price: basePrice,
+    discount_price: baseDiscount,
+    size_pricing: Object.keys(sizePricing).length > 0 ? sizePricing : null,
     rating: parseRating(String(candidate.rating ?? "")),
     image_path: candidate.imageSrc || importRow.image_path || "/collection_img.png",
     tag: field(formData, "tag") || null,
@@ -480,14 +517,14 @@ export async function publishImportAdmin(formData: FormData) {
 export async function updateProductAdmin(formData: FormData) {
   const { supabase } = await requireAdmin();
   const productId = requiredField(formData, "product_id", "Product id");
-  const price = parseRequiredPrice(formData, "price", "Price");
-  const discountPrice = parseOptionalDiscount(formData, price);
+  const { basePrice, baseDiscount, sizePricing } = parseSizePricing(formData);
 
   const { error } = await supabase
     .from("products")
     .update({
-      price,
-      discount_price: discountPrice,
+      price: basePrice,
+      discount_price: baseDiscount,
+      size_pricing: Object.keys(sizePricing).length > 0 ? sizePricing : null,
       tag: field(formData, "tag") || null,
       is_active: parseBoolean(formData, "is_active", false),
     })
@@ -559,8 +596,7 @@ export async function createManualProductAdmin(
     const { supabase } = await requireAdmin();
     const brand = requiredField(formData, "brand", "Brand");
     const name = requiredField(formData, "name", "Perfume name");
-    const price = parseRequiredPrice(formData, "price", "Price");
-    const discountPrice = parseOptionalDiscount(formData, price);
+    const { basePrice, baseDiscount, sizePricing } = parseSizePricing(formData);
     const notes = splitList(requiredField(formData, "notes", "Notes")).slice(0, 12);
     const selectedSeasons = formData
       .getAll("seasons")
@@ -571,8 +607,9 @@ export async function createManualProductAdmin(
       id: field(formData, "product_id") || slug(`${name}-${brand}`),
       name,
       brand,
-      price,
-      discount_price: discountPrice,
+      price: basePrice,
+      discount_price: baseDiscount,
+      size_pricing: Object.keys(sizePricing).length > 0 ? sizePricing : null,
       rating: parseRating(field(formData, "rating")),
       image_path: field(formData, "image_path") || "/collection_img.png",
       tag: field(formData, "tag") || null,

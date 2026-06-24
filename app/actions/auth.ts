@@ -31,11 +31,21 @@ export async function signUp(
     return { error: "Password must be at least 8 characters." };
   }
 
-  const { error } = await supabase.auth.signUp({
+  const headerList = await headers();
+  const origin =
+    headerList.get("origin") ??
+    (headerList.get("host") ? `https://${headerList.get("host")}` : "");
+  const redirectTo = (formData.get("redirectTo") as string | null)?.trim();
+  const next = redirectTo && redirectTo.startsWith("/") ? redirectTo : "/account";
+
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
       data: { full_name: fullName },
+      // If email confirmation is enabled, the link returns to our own branded
+      // callback (which establishes the session) instead of Supabase's default.
+      emailRedirectTo: origin ? `${origin}/auth/callback?next=${encodeURIComponent(next)}` : undefined,
     },
   });
 
@@ -43,10 +53,23 @@ export async function signUp(
     return { error: error.message };
   }
 
+  // Supabase returns a user with an empty `identities` array when the email is
+  // already registered (it avoids leaking that the account exists).
+  if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+    return { error: "An account with this email already exists. Please sign in instead." };
+  }
+
   revalidatePath("/", "layout");
+
+  // Email confirmation disabled → a session is returned, so log the user in and
+  // send them straight to their destination instead of an "all products" page.
+  if (data.session) {
+    redirect(next);
+  }
+
+  // Email confirmation enabled → no session yet; prompt to confirm.
   return {
-    message:
-      "Account created! Check your email for a confirmation link before signing in.",
+    message: "Account created! Check your inbox to confirm your email, then sign in.",
   };
 }
 

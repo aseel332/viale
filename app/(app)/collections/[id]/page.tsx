@@ -114,7 +114,7 @@ export default async function CollectionDetailPage({
           <AddCollectionButton collectionId={collection.id} price={collection.bundlePrice} />
 
           <p className="text-[11px] text-[#6B6B6B] leading-relaxed border-l-2 border-[#C9A86C] pl-3">
-            Ships within 24 hours · Secure, discreet packaging · 100% authentic
+            Delivery in 4–10 days · Secure, discreet packaging · 100% authentic
           </p>
         </div>
       </section>

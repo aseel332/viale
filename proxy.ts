@@ -24,7 +24,9 @@ export async function proxy(request: NextRequest) {
 
   if (isProtected && !user) {
     const loginUrl = new URL("/account", request.url);
-    loginUrl.searchParams.set("redirectTo", pathname);
+    // Preserve the full path + query (e.g. /checkout?buyNow=…&size=…) so the
+    // user returns to the exact page after signing in.
+    loginUrl.searchParams.set("redirectTo", pathname + request.nextUrl.search);
     return NextResponse.redirect(loginUrl);
   }
 

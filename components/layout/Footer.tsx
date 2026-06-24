@@ -2,8 +2,17 @@ import Link from "next/link";
 import Logo from "./Logo";
 
 const shopLinks    = ["All", "Collections", "Men", "Women"];
-const companyLinks = ["About", "Our Story", "Authenticity"];
-const supportLinks = ["FAQ", "Shipping", "Returns", "Contact"];
+const companyLinks: { label: string; href: string }[] = [
+  { label: "About", href: "/about" },
+  { label: "Contact", href: "/contact" },
+  { label: "Terms", href: "/terms" },
+];
+const supportLinks: { label: string; href: string }[] = [
+  { label: "Shipping Policy", href: "/shipping-policy" },
+  { label: "Refund & Cancellation", href: "/refund-policy" },
+  { label: "Privacy Policy", href: "/privacy" },
+  { label: "Contact", href: "/contact" },
+];
 
 export default function Footer({ fromPrice }: { fromPrice: string }) {
   return (
@@ -20,7 +29,7 @@ export default function Footer({ fromPrice }: { fromPrice: string }) {
               <span className="text-[#C9A86C]">·</span>
               <span>Try Before You Commit</span>
               <span className="text-[#C9A86C]">·</span>
-              <span>Ships in 24 Hours</span>
+              <span>Delivery in 4–10 Days</span>
               <span className="text-[#C9A86C]">·</span>
               <span>200+ Luxury Brands</span>
               <span className="text-[#C9A86C]">·</span>
@@ -62,11 +71,11 @@ export default function Footer({ fromPrice }: { fromPrice: string }) {
           <div>
             <h4 className="text-[10px] tracking-[0.2em] uppercase text-white/40 mb-5">Company</h4>
             <ul className="space-y-3">
-              {companyLinks.map((label) => (
+              {companyLinks.map(({ label, href }) => (
                 <li key={label}>
-                  <span className="text-sm text-white/70 cursor-pointer hover:text-white transition-colors">
+                  <Link href={href} className="text-sm text-white/70 hover:text-white transition-colors">
                     {label}
-                  </span>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -76,11 +85,11 @@ export default function Footer({ fromPrice }: { fromPrice: string }) {
           <div>
             <h4 className="text-[10px] tracking-[0.2em] uppercase text-white/40 mb-5">Support</h4>
             <ul className="space-y-3">
-              {supportLinks.map((label) => (
+              {supportLinks.map(({ label, href }) => (
                 <li key={label}>
-                  <span className="text-sm text-white/70 cursor-pointer hover:text-white transition-colors">
+                  <Link href={href} className="text-sm text-white/70 hover:text-white transition-colors">
                     {label}
-                  </span>
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -93,8 +102,8 @@ export default function Footer({ fromPrice }: { fromPrice: string }) {
             © 2026 Viale. All rights reserved. Decants sourced from authentic bottles.
           </p>
           <div className="flex items-center gap-4">
-            <span className="text-[11px] text-white/30">Privacy</span>
-            <span className="text-[11px] text-white/30">Terms</span>
+            <Link href="/privacy" className="text-[11px] text-white/30 hover:text-white/70 transition-colors">Privacy</Link>
+            <Link href="/terms" className="text-[11px] text-white/30 hover:text-white/70 transition-colors">Terms</Link>
           </div>
         </div>
       </div>

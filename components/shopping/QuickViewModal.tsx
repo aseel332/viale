@@ -7,8 +7,7 @@ import { useRouter } from "next/navigation";
 import { X, ShoppingBag, Check, Loader2 } from "lucide-react";
 import {
   BOTTLE_SIZES,
-  effectiveBasePrice,
-  priceForSize,
+  resolveSizePrice,
   formatPrice,
   type BottleSize,
   type Product,
@@ -39,26 +38,28 @@ export default function QuickViewModal({ product, open, onClose }: Props) {
 
   if (!open || typeof document === "undefined" || !document.body) return null;
 
-  const basePrice = effectiveBasePrice(product);
-  const hasDiscount = basePrice < product.price;
-  const price = priceForSize(basePrice, size);
-  const originalPrice = priceForSize(product.price, size);
+  const selectedPricing = resolveSizePrice(product, size);
+  const hasDiscount = selectedPricing.hasDiscount;
+  const price = selectedPricing.price;
+  const originalPrice = selectedPricing.original;
 
-  function handleAdd(thenCheckout = false) {
+  function handleAdd() {
     startTransition(async () => {
       const res = await addCartItem({ itemType: "product", productId: product.id, sizeMl: size, quantity: 1 });
       if (res.status === 401) {
         router.push(`/account?redirectTo=/products/${product.id}`);
         return;
       }
-      if (thenCheckout) {
-        router.push("/checkout");
-        return;
-      }
       setAdded(true);
       router.refresh();
       setTimeout(() => setAdded(false), 2200);
     });
+  }
+
+  function handleBuyNow() {
+    // Direct purchase of just this product+size — never pulls the whole cart in.
+    const target = `/checkout?buyNow=${encodeURIComponent(product.id)}&size=${size}`;
+    router.push(target);
   }
 
   // Render via a portal to <body> so the fixed overlay escapes any
@@ -122,8 +123,9 @@ export default function QuickViewModal({ product, open, onClose }: Props) {
         <div className="flex gap-2 mb-6">
           {BOTTLE_SIZES.map((s) => {
             const selected = size === s;
-            const sizePrice = priceForSize(basePrice, s);
-            const originalSizePrice = priceForSize(product.price, s);
+            const sizePricing = resolveSizePrice(product, s);
+            const sizePrice = sizePricing.price;
+            const originalSizePrice = sizePricing.original;
             return (
               <button
                 key={s}
@@ -135,7 +137,7 @@ export default function QuickViewModal({ product, open, onClose }: Props) {
                 <span className="text-[14px] font-semibold">{s}ml</span>
                 <span className={`text-[10px] mt-0.5 ${selected ? "text-white/70" : "text-[#6B6B6B]"}`}>
                   {formatPrice(sizePrice)}
-                  {hasDiscount && (
+                  {sizePricing.hasDiscount && (
                     <span className="ml-1 line-through opacity-70">
                       {formatPrice(originalSizePrice)}
                     </span>
@@ -164,7 +166,7 @@ export default function QuickViewModal({ product, open, onClose }: Props) {
         {/* Actions */}
         <div className="space-y-2.5">
           <button
-            onClick={() => handleAdd(false)}
+            onClick={handleAdd}
             disabled={isPending}
             className={`w-full flex items-center justify-center gap-2 py-3.5 text-[11px] tracking-[0.2em] uppercase font-medium transition-all disabled:opacity-60 ${
               added ? "bg-[#3A7A3A] text-white" : "bg-[#111] text-white hover:bg-[#333]"
@@ -174,7 +176,7 @@ export default function QuickViewModal({ product, open, onClose }: Props) {
             {added ? "Added to Bag" : "Add to Bag"}
           </button>
           <button
-            onClick={() => handleAdd(true)}
+            onClick={handleBuyNow}
             disabled={isPending}
             className="w-full py-3.5 text-[11px] tracking-[0.2em] uppercase font-medium border border-[#111] text-[#111] hover:bg-[#111] hover:text-white transition-colors disabled:opacity-60"
           >

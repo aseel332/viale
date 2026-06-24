@@ -179,7 +179,7 @@ export default async function CollectionsPage() {
 
           <AnimateIn delay={100}>
             <div className="flex flex-wrap gap-x-8 gap-y-3 mt-8">
-              {["4 decants per box (5ml each)", "100% authentic, sealed bottles", "Ships in 24 hours"].map((pill) => (
+              {["4 decants per box (5ml each)", "100% authentic, sealed bottles", "Delivery in 4–10 days"].map((pill) => (
                 <p key={pill} className="flex items-center gap-2 text-[11px] text-[#6B6B6B]">
                   <span className="text-[#C9A86C]">✦</span> {pill}
                 </p>

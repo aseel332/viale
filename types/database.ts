@@ -33,7 +33,21 @@ export type OrderStatus =
   | "cancelled"
   | "refunded";
 
+/** How the order is/was paid. */
+export type PaymentMethod = "razorpay" | "cod";
+
+/** Money state of the order, independent of fulfillment `status`. */
+export type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
+
+/** Event kinds on the order timeline. */
+export type OrderEventType = "status_change" | "shipment" | "note" | "payment";
+
 export type CartItemType = "product" | "collection";
+
+/** Optional per-size price/discount override stored on products.size_pricing.
+ *  Keys are ml as strings ("5" | "10" | "30"); every field is optional. */
+export type SizePriceEntry = { price?: number | null; discount?: number | null };
+export type SizePricingMap = Partial<Record<"5" | "10" | "30", SizePriceEntry>>;
 
 // ── Row shapes (what the DB returns) ─────────────────────────────────────────
 
@@ -149,6 +163,7 @@ export type ProductRow = {
   brand: string;
   price: number;
   discount_price: number | null;
+  size_pricing: SizePricingMap | null;  // optional per-size overrides; null → multiplier model
   rating: number;
   image_path: string;           // Supabase Storage path
   tag: string | null;           // "Bestseller" | "Top Pick" | "Iconic" | null
@@ -159,6 +174,7 @@ export type ProductRow = {
   description: string;
   long_description: string;
   bottle_sizes: number[];       // available ml sizes e.g. [5, 10, 30]
+  weight_g: number;             // per-unit shipping weight in grams
   is_active: boolean;
   source_import_id: string | null;
   created_at: string;
@@ -186,6 +202,15 @@ export type CollectionItemRow = {
   created_at: string;
 };
 
+/** Snapshot of the chosen Shiprocket courier stored on orders.shipping_quote. */
+export type ShippingQuoteSnapshot = {
+  courier_name: string;
+  base_rate: number;      // cheapest courier's full rate (₹)
+  charged: number;        // what the customer pays (50% of base_rate, or 0 if free)
+  etd_days: number | null;
+  cod: boolean;
+};
+
 export type OrderRow = {
   id: string;
   user_id: string;
@@ -193,8 +218,39 @@ export type OrderRow = {
   total_amount: number;
   shipping_address: ShippingAddress | null;
   notes: string | null;
+  // payment
+  payment_method: PaymentMethod | null;
+  payment_status: PaymentStatus;
+  razorpay_order_id: string | null;
+  razorpay_payment_id: string | null;
+  // money breakdown
+  subtotal: number | null;
+  shipping_charge: number | null;
+  shipping_quote: ShippingQuoteSnapshot | null;
+  // fulfillment / courier
+  shiprocket_order_id: string | null;
+  shiprocket_shipment_id: string | null;
+  awb_code: string | null;
+  courier_name: string | null;
+  tracking_url: string | null;
+  label_url: string | null;
+  // contact (for courier + notifications)
+  contact_email: string | null;
+  contact_phone: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type OrderEventRow = {
+  id: string;
+  order_id: string;
+  type: OrderEventType;
+  title: string;
+  description: string | null;
+  status: OrderStatus | null;
+  is_customer_visible: boolean;
+  created_by: string | null;     // admin user id; null = system/webhook
+  created_at: string;
 };
 
 export type OrderItemRow = {
@@ -248,11 +304,37 @@ export type PaymentMethodInsert = Omit<PaymentMethodRow, "id" | "created_at">;
 export type PerfumeImportInsert = Omit<PerfumeImportRow, "id" | "created_at" | "updated_at">;
 export type PerfumeDiscoveryJobInsert = Omit<PerfumeDiscoveryJobRow, "id" | "created_at" | "updated_at">;
 export type PerfumeCandidateInsert = Omit<PerfumeCandidateRow, "id" | "created_at" | "updated_at">;
-export type ProductInsert = Omit<ProductRow, "created_at" | "updated_at">;
+export type ProductInsert =
+  Omit<ProductRow, "created_at" | "updated_at" | "weight_g"> &
+  Partial<Pick<ProductRow, "weight_g">>;
 export type CollectionInsert = Omit<CollectionRow, "created_at" | "updated_at">;
 export type CollectionItemInsert = Omit<CollectionItemRow, "id" | "created_at">;
-export type OrderInsert = Omit<OrderRow, "id" | "created_at" | "updated_at">;
+// New payment/fulfillment columns all have DB defaults or are nullable, so they
+// are optional at insert time; only the original core fields are required.
+type OrderInsertOptional =
+  | "payment_method"
+  | "payment_status"
+  | "razorpay_order_id"
+  | "razorpay_payment_id"
+  | "subtotal"
+  | "shipping_charge"
+  | "shipping_quote"
+  | "shiprocket_order_id"
+  | "shiprocket_shipment_id"
+  | "awb_code"
+  | "courier_name"
+  | "tracking_url"
+  | "label_url"
+  | "contact_email"
+  | "contact_phone";
+export type OrderInsert =
+  Omit<OrderRow, "id" | "created_at" | "updated_at" | OrderInsertOptional> &
+  Partial<Pick<OrderRow, OrderInsertOptional>>;
 export type OrderItemInsert = Omit<OrderItemRow, "id" | "created_at">;
+export type OrderEventInsert =
+  Omit<OrderEventRow, "id" | "created_at" | "status" | "description" | "is_customer_visible" | "created_by"> &
+  Partial<Pick<OrderEventRow, "status" | "description" | "is_customer_visible" | "created_by">>;
+export type OrderUpdate = Partial<Omit<OrderRow, "id" | "user_id" | "created_at" | "updated_at">>;
 export type CartItemInsert = Omit<CartItemRow, "id" | "created_at" | "updated_at">;
 export type WishlistItemInsert = Omit<WishlistItemRow, "id" | "created_at">;
 export type ReviewInsert =
@@ -285,6 +367,11 @@ export type OrderWithItems = OrderRow & {
     product: ProductRow | null;
     collection: CollectionRow | null;
   })[];
+};
+
+/** Order with line items and its event timeline (admin + order detail views) */
+export type OrderWithDetails = OrderWithItems & {
+  order_events: OrderEventRow[];
 };
 
 /** Cart item with resolved product/collection */
@@ -381,13 +468,19 @@ export type Database = {
       orders: {
         Row: OrderRow;
         Insert: OrderInsert;
-        Update: Partial<Pick<OrderRow, "status" | "shipping_address" | "notes">>;
+        Update: OrderUpdate;
         Relationships: [];
       };
       order_items: {
         Row: OrderItemRow;
         Insert: OrderItemInsert;
         Update: Record<string, unknown>;
+        Relationships: [];
+      };
+      order_events: {
+        Row: OrderEventRow;
+        Insert: OrderEventInsert;
+        Update: Partial<Omit<OrderEventRow, "id" | "order_id" | "created_at">>;
         Relationships: [];
       };
       cart_items: {

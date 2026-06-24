@@ -3,8 +3,8 @@ import "server-only";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProductById, getStorefrontCollectionById } from "@/lib/catalog";
-import { effectiveBasePrice, priceForSize, type BottleSize } from "@/lib/product-utils";
-import type { AddCartItemInput, CartLine, CartSummary } from "@/types/commerce";
+import { resolveSizePrice, type BottleSize } from "@/lib/product-utils";
+import type { AddCartItemInput, BuyNowInput, CartLine, CartSummary } from "@/types/commerce";
 
 function validBottleSize(value: unknown): BottleSize {
   return value === 5 || value === 10 || value === 30 ? value : 5;
@@ -189,7 +189,7 @@ export async function getCart(): Promise<CartSummary> {
       const product = await getProductById(row.product_id);
       if (!product) continue;
       const size = validBottleSize(row.size_ml);
-      const unitPrice = priceForSize(effectiveBasePrice(product), size);
+      const unitPrice = resolveSizePrice(product, size).price;
       lines.push({
         id: row.id,
         itemType: "product",
@@ -224,4 +224,36 @@ export async function getCart(): Promise<CartSummary> {
   const subtotal = lines.reduce((sum, line) => sum + line.lineTotal, 0);
   const count = lines.reduce((sum, line) => sum + line.quantity, 0);
   return { lines, subtotal, count };
+}
+
+/**
+ * Build a one-line cart summary for a "Buy Now" direct purchase, without
+ * touching the user's persistent cart. Price is resolved server-side from the
+ * catalogue — the client never sets it. Returns an empty summary if the product
+ * is unavailable.
+ */
+export async function buildBuyNowSummary(input: BuyNowInput): Promise<CartSummary> {
+  const empty: CartSummary = { lines: [], subtotal: 0, count: 0 };
+
+  const product = await getProductById(input.productId);
+  if (!product) return empty;
+
+  const size = validBottleSize(input.sizeMl);
+  const quantity = normalizeQuantity(input.quantity);
+  const unitPrice = resolveSizePrice(product, size).price;
+
+  const line: CartLine = {
+    id: `buy-now:${product.id}:${size}`,
+    itemType: "product",
+    refId: product.id,
+    name: product.name,
+    brand: product.brand,
+    imageSrc: product.imageSrc,
+    sizeMl: size,
+    quantity,
+    unitPrice,
+    lineTotal: unitPrice * quantity,
+  };
+
+  return { lines: [line], subtotal: line.lineTotal, count: quantity };
 }

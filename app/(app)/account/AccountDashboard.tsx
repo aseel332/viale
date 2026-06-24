@@ -391,6 +391,15 @@ function OrdersPanel({ orders }: { orders: OrderView[] }) {
               </div>
             ))}
           </div>
+
+          <div className="pt-4 mt-2 border-t border-[#E8E4DE]">
+            <Link
+              href={`/account/orders/${order.id}`}
+              className="inline-flex items-center text-[11px] tracking-[0.15em] uppercase text-[#111] hover:text-[#C9A86C] transition-colors"
+            >
+              View &amp; track order →
+            </Link>
+          </div>
         </div>
       ))}
     </div>

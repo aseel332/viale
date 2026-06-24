@@ -198,7 +198,7 @@ export default function CartClient({ initialLines, subtotal, shipping }: Props) 
           </Link>
 
           <p className="text-[11px] text-[#6B6B6B] leading-relaxed mt-4 text-center">
-            Secure checkout · Ships in 24 hours · 100% authentic
+            Secure checkout · Delivery in 4–10 days · 100% authentic
           </p>
         </div>
       </div>

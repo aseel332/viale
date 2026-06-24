@@ -38,7 +38,7 @@ function buildWhyItems(fromPrice: string) {
   { icon: "✦", title: "100% Authentic",           body: "Every decant is sourced directly from sealed full-size bottles. Never a fake."              },
   { icon: "◈", title: "Try Before You Commit",     body: `Sample any luxury scent from ${fromPrice}. No blind-buying, no regret.`                  },
   { icon: "◉", title: "200+ Luxury Brands",        body: "Dior, Creed, Tom Ford, MFK and hundreds more — all in one place."                         },
-  { icon: "◇", title: "Ships in 24 Hours",         body: "Discreet, secure packaging. Your order is out the door the next day."                      },
+  { icon: "◇", title: "Delivery in 4–10 Days",     body: "Discreet, secure packaging shipped with India's most reliable couriers."                  },
   ];
 }
 
@@ -136,8 +136,8 @@ export default async function Home() {
             </div>
             <div className="w-px h-8 bg-[#E8E4DE]" />
             <div className="text-center">
-              <p className="text-xl font-[family-name:var(--font-cormorant)] font-medium text-[#111]">24hr</p>
-              <p className="text-[9px] tracking-[0.2em] uppercase text-[#6B6B6B]">Dispatch</p>
+              <p className="text-xl font-[family-name:var(--font-cormorant)] font-medium text-[#111]">4–10d</p>
+              <p className="text-[9px] tracking-[0.2em] uppercase text-[#6B6B6B]">Delivery</p>
             </div>
           </div>
         </div>
@@ -193,8 +193,8 @@ export default async function Home() {
               </div>
               <div className="w-px h-8 bg-[#E8E4DE]" />
               <div className="text-center">
-                <p className="text-xl font-[family-name:var(--font-cormorant)] font-medium text-[#111]">24hr</p>
-                <p className="text-[9px] tracking-[0.2em] uppercase text-[#6B6B6B]">Dispatch</p>
+                <p className="text-xl font-[family-name:var(--font-cormorant)] font-medium text-[#111]">4–10d</p>
+                <p className="text-[9px] tracking-[0.2em] uppercase text-[#6B6B6B]">Delivery</p>
               </div>
             </div>
           </div>

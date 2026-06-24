@@ -1,8 +1,11 @@
 import type {
   AddCartItemInput,
+  BuyNowInput,
   CartSummary,
   PlaceOrderInput,
+  PlaceOrderResult,
   ReviewInput,
+  ShippingQuoteResult,
   UpdateCartItemInput,
 } from "@/types/commerce";
 
@@ -60,7 +63,28 @@ export async function submitReview(input: ReviewInput) {
 }
 
 export async function placeOrder(input: PlaceOrderInput) {
-  return requestJson<{ orderId: string }>("/api/checkout", {
+  return requestJson<PlaceOrderResult>("/api/checkout", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function getShippingQuote(postalCode: string, buyNow?: BuyNowInput | null) {
+  return requestJson<ShippingQuoteResult>("/api/shipping/quote", {
+    method: "POST",
+    body: JSON.stringify({ postal_code: postalCode, buyNow: buyNow ?? undefined }),
+  });
+}
+
+export type VerifyPaymentInput = {
+  orderId: string;
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+};
+
+export async function verifyPayment(input: VerifyPaymentInput) {
+  return requestJson<{ orderId: string; status: string }>("/api/payment/verify", {
     method: "POST",
     body: JSON.stringify(input),
   });

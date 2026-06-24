@@ -8,9 +8,10 @@ import {
   type Gender,
   type Product,
   type Season,
+  type SizePricing,
   toINR,
 } from "@/lib/product-utils";
-import type { CollectionRow, ProductRow } from "@/types/database";
+import type { CollectionRow, ProductRow, SizePricingMap } from "@/types/database";
 
 const CATALOG_TTL_SECONDS = 300;
 const PRODUCTS_CACHE_KEY = "viale:catalog:products:v2";
@@ -47,6 +48,22 @@ function normalizePrice(value: number | null) {
   return amount > 0 && amount < 100 ? toINR(amount) : amount;
 }
 
+// Admin-entered per-size overrides are already INR; coerce keys/values and drop
+// anything malformed so a bad row can never crash the storefront.
+function sizePricingFromRow(value: SizePricingMap | null | undefined): SizePricing | null {
+  if (!value || typeof value !== "object") return null;
+  const out: SizePricing = {};
+  for (const size of [5, 10, 30] as const) {
+    const entry = value[String(size) as "5" | "10" | "30"];
+    if (!entry) continue;
+    const price = normalizePrice(entry.price ?? null);
+    const discount = normalizePrice(entry.discount ?? null);
+    if (price == null && discount == null) continue;
+    out[size] = { price: price ?? undefined, discount: discount ?? undefined };
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
 export function productFromRow(row: ProductRow): Product {
   const bottleSizes = (row.bottle_sizes ?? [5, 10, 30])
     .map(asBottleSize)
@@ -58,6 +75,7 @@ export function productFromRow(row: ProductRow): Product {
     brand: row.brand,
     price: normalizePrice(row.price) ?? 0,
     discountPrice: normalizePrice(row.discount_price),
+    sizePricing: sizePricingFromRow(row.size_pricing),
     rating: Number(row.rating),
     imageSrc: row.image_path || "/collection_img.png",
     tag: row.tag ?? undefined,

@@ -6,15 +6,20 @@ import {
   Ban,
   Bot,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   Layers3,
   Package,
   PackagePlus,
+  Pencil,
   Save,
   Search,
+  ShoppingCart,
   Sparkles,
   Tags,
   UploadCloud,
 } from "lucide-react";
+import OrdersPanel, { type AdminOrder } from "./OrdersPanel";
 import {
   approvePerfumeCandidateAdmin,
   createCollectionAdmin,
@@ -27,7 +32,7 @@ import {
   updateProductAdmin,
   type AdminActionState,
 } from "@/app/actions/admin";
-import { formatPrice } from "@/lib/product-utils";
+import { BOTTLE_SIZES, formatPrice, priceForSize } from "@/lib/product-utils";
 import type {
   CollectionRow,
   PerfumeCandidateRow,
@@ -36,7 +41,7 @@ import type {
   ProductRow,
 } from "@/types/database";
 
-type TabId = "agent" | "products" | "collections";
+type TabId = "agent" | "products" | "collections" | "orders";
 
 type Props = {
   role: "admin" | "owner";
@@ -45,6 +50,7 @@ type Props = {
   collections: CollectionRow[];
   candidates: PerfumeCandidateRow[];
   jobs: PerfumeDiscoveryJobRow[];
+  orders: AdminOrder[];
 };
 
 const initialActionState: AdminActionState = {};
@@ -52,6 +58,12 @@ const families = ["Fresh", "Floral", "Woody", "Oriental", "Gourmand", "Chypre"];
 const genders = ["Men", "Women", "Unisex"];
 const seasons = ["Spring", "Summer", "Autumn", "Winter"];
 const categories = ["summer", "winter", "celebrity"];
+
+// Candidate states that no longer need attention — kept out of the active queue
+// so published/handled perfumes don't pile up next to fresh ones.
+const RESOLVED_CANDIDATE_STATUSES = new Set(["enriched", "duplicate", "rejected"]);
+// Import drafts that have left the queue (already a product, or discarded).
+const CLOSED_IMPORT_STATUSES = new Set(["published", "rejected"]);
 
 function SubmitButton({
   children,
@@ -108,11 +120,13 @@ function inputClass(className = "") {
 
 function StatusBadge({ status }: { status: string }) {
   const tone =
-    status === "published"
+    status === "published" || status === "enriched"
       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
       : status === "failed" || status === "rejected"
         ? "border-red-200 bg-red-50 text-red-700"
-        : "border-[#D8D1C8] bg-white text-[#6B6B6B]";
+        : status === "duplicate"
+          ? "border-amber-200 bg-amber-50 text-amber-700"
+          : "border-[#D8D1C8] bg-white text-[#6B6B6B]";
 
   return (
     <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${tone}`}>
@@ -121,8 +135,62 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function money(value: number | null) {
+function money(value: number | null | undefined) {
   return value == null ? "" : String(Number(value));
+}
+
+// Per-size price + discount inputs (5 / 10 / 30 ml). Emits price_5/discount_5 …
+// fields parsed by parseSizePricing on the server. When editing an existing
+// product, prefills any stored overrides and hints the multiplier price for the
+// sizes that have none.
+function SizePriceFields({ product }: { product?: ProductRow }) {
+  const basePrice = Number(product?.price ?? 0);
+  return (
+    <div className="rounded-md border border-[#E8E4DE] bg-white p-3">
+      <div className="grid grid-cols-[44px_1fr_1fr] items-center gap-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#6B6B6B]">
+        <span>Size</span>
+        <span>Price ₹</span>
+        <span>Discount ₹</span>
+      </div>
+      <div className="space-y-2">
+        {BOTTLE_SIZES.map((size) => {
+          const entry = product?.size_pricing?.[String(size) as "5" | "10" | "30"];
+          const priceValue =
+            entry?.price != null ? entry.price : size === 5 ? product?.price ?? null : null;
+          const discountValue =
+            entry?.discount != null ? entry.discount : size === 5 ? product?.discount_price ?? null : null;
+          const placeholder = basePrice > 0 ? String(priceForSize(basePrice, size)) : "0";
+          return (
+            <div key={size} className="grid grid-cols-[44px_1fr_1fr] items-center gap-2">
+              <span className="text-sm font-semibold text-[#111]">{size}ml</span>
+              <input
+                name={`price_${size}`}
+                type="number"
+                min="0"
+                step="1"
+                required={size === 5}
+                defaultValue={money(priceValue)}
+                placeholder={size === 5 ? "required" : placeholder}
+                className={inputClass("mt-0")}
+              />
+              <input
+                name={`discount_${size}`}
+                type="number"
+                min="0"
+                step="1"
+                defaultValue={money(discountValue)}
+                placeholder="none"
+                className={inputClass("mt-0")}
+              />
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-2 text-[10px] leading-relaxed text-[#6B6B6B]">
+        5ml price is required. Leave 10ml / 30ml blank to auto-price from the 5ml base.
+      </p>
+    </div>
+  );
 }
 
 function candidatePreview(row: PerfumeImportRow) {
@@ -153,10 +221,13 @@ function AgentPanel({
 }) {
   const [discoverState, discoverAction] = useActionState(discoverPerfumesAdmin, initialActionState);
   const [generateState, generateAction] = useActionState(generatePerfumeImportAdmin, initialActionState);
-  const pendingImports = imports.filter((row) => row.status !== "published");
+
+  const queueImports = imports.filter((row) => !CLOSED_IMPORT_STATUSES.has(row.status));
   const latestJob = jobs[0];
-  const visibleCandidates = candidates.filter((row) => row.status !== "rejected").slice(0, 24);
+  const activeCandidates = candidates.filter((row) => !RESOLVED_CANDIDATE_STATUSES.has(row.status));
+  const visibleCandidates = activeCandidates.slice(0, 24);
   const pendingCandidates = candidates.filter((row) => row.status === "candidate").length;
+  const resolvedCount = candidates.length - activeCandidates.length;
 
   return (
     <div className="space-y-8">
@@ -234,13 +305,16 @@ function AgentPanel({
             <Search size={18} />
             <h2 className="text-lg font-semibold text-[#111]">Candidate Queue</h2>
           </div>
-          <span className="text-xs text-[#6B6B6B]">{pendingCandidates} awaiting review</span>
+          <span className="text-xs text-[#6B6B6B]">
+            {pendingCandidates} awaiting review
+            {resolvedCount > 0 && ` · ${resolvedCount} resolved hidden`}
+          </span>
         </div>
 
         <div className="grid gap-3">
           {visibleCandidates.length === 0 ? (
             <div className="rounded-md border border-dashed border-[#D8D1C8] bg-white p-8 text-center text-sm text-[#6B6B6B]">
-              No candidates queued.
+              No candidates awaiting review.
             </div>
           ) : visibleCandidates.map((candidate) => (
             <article key={candidate.id} className="rounded-md border border-[#E8E4DE] bg-white p-4">
@@ -297,10 +371,6 @@ function AgentPanel({
                         <SubmitButton icon={Ban} variant="light">Reject</SubmitButton>
                       </form>
                     </>
-                  ) : candidate.status === "enriched" ? (
-                    <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                      Draft ready in import queue.
-                    </div>
                   ) : (
                     <div className="rounded-md border border-[#E8E4DE] bg-white px-3 py-2 text-sm text-[#6B6B6B]">
                       {candidate.status}
@@ -319,23 +389,23 @@ function AgentPanel({
             <Package size={18} />
             <h2 className="text-lg font-semibold text-[#111]">Import Queue</h2>
           </div>
-          <span className="text-xs text-[#6B6B6B]">{pendingImports.length} pending</span>
+          <span className="text-xs text-[#6B6B6B]">{queueImports.length} pending</span>
         </div>
 
         <div className="grid gap-4">
-          {imports.length === 0 ? (
+          {queueImports.length === 0 ? (
             <div className="rounded-md border border-dashed border-[#D8D1C8] bg-white p-8 text-center text-sm text-[#6B6B6B]">
-              No import drafts yet.
+              No drafts waiting to publish.
             </div>
-          ) : imports.map((row) => {
+          ) : queueImports.map((row) => {
             const candidate = candidatePreview(row);
             const imageSrc = candidate.imageSrc || row.image_path || "/collection_img.png";
             return (
               <article key={row.id} className="rounded-md border border-[#E8E4DE] bg-white p-4">
                 <div className="grid gap-4 lg:grid-cols-[120px_1fr_360px]">
-                  <div className="aspect-square rounded-md bg-[#F5F1EB] p-2">
+                  <div className="aspect-[3/4] overflow-hidden rounded-md bg-[#F5F1EB] p-2">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={imageSrc} alt={row.product_name} className="h-full w-full object-contain" />
+                    <img src={imageSrc} alt={row.product_name} className="h-full w-full object-cover" />
                   </div>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -364,14 +434,10 @@ function AgentPanel({
                       <Label>Product id</Label>
                       <input name="product_id" defaultValue={row.product_slug} className={inputClass()} />
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <Label>Price</Label>
-                        <input name="price" required type="number" min="0" step="1" className={inputClass()} />
-                      </div>
-                      <div>
-                        <Label>Discount</Label>
-                        <input name="discount_price" type="number" min="0" step="1" className={inputClass()} />
+                    <div>
+                      <Label>Size pricing</Label>
+                      <div className="mt-1">
+                        <SizePriceFields />
                       </div>
                     </div>
                     <div>
@@ -394,9 +460,80 @@ function AgentPanel({
   );
 }
 
+function ProductRowEditor({ product }: { product: ProductRow }) {
+  const [open, setOpen] = useState(false);
+  const discountedSizes = product.size_pricing
+    ? Object.values(product.size_pricing).filter((entry) => entry?.discount != null).length
+    : product.discount_price != null
+      ? 1
+      : 0;
+
+  return (
+    <div className="px-4 py-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-[#111]">{product.brand} · {product.name}</p>
+          <p className="truncate text-xs text-[#6B6B6B]">{product.id}</p>
+        </div>
+        <div className="text-right">
+          <p className="text-sm font-semibold text-[#111]">{formatPrice(Number(product.price) || 0)}</p>
+          <p className="text-[10px] uppercase tracking-[0.12em] text-[#6B6B6B]">
+            5ml base{discountedSizes > 0 ? ` · ${discountedSizes} on sale` : ""}
+          </p>
+        </div>
+        <span
+          className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+            product.is_active
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border-[#D8D1C8] bg-white text-[#6B6B6B]"
+          }`}
+        >
+          {product.is_active ? "Live" : "Hidden"}
+        </span>
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          className="inline-flex items-center gap-1.5 rounded-md border border-[#D8D1C8] bg-white px-3 py-1.5 text-xs font-semibold text-[#111] transition hover:border-[#111]"
+        >
+          <Pencil size={13} />
+          {open ? "Close" : "Edit"}
+          {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+        </button>
+      </div>
+
+      {open && (
+        <form action={updateProductAdmin} className="mt-4 grid gap-3 rounded-md bg-[#FAFAF8] p-4 lg:grid-cols-[1fr_240px]">
+          <input type="hidden" name="product_id" value={product.id} />
+          <SizePriceFields product={product} />
+          <div className="grid content-start gap-3">
+            <div>
+              <Label>Tag</Label>
+              <input name="tag" defaultValue={product.tag ?? ""} placeholder="Bestseller" className={inputClass()} />
+            </div>
+            <label className="flex items-center gap-2 text-sm text-[#111]">
+              <input name="is_active" type="checkbox" defaultChecked={product.is_active} className="h-4 w-4 accent-[#111]" />
+              Available on storefront
+            </label>
+            <SubmitButton icon={Save}>Save Changes</SubmitButton>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}
+
 function ProductsPanel({ products }: { products: ProductRow[] }) {
   const [manualState, manualAction] = useActionState(createManualProductAdmin, initialActionState);
   const [syncState, syncAction] = useActionState(syncCatalogImagesAdmin, initialActionState);
+  const [query, setQuery] = useState("");
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return products;
+    return products.filter((product) =>
+      `${product.brand} ${product.name} ${product.id}`.toLowerCase().includes(q),
+    );
+  }, [products, query]);
 
   return (
     <div className="grid gap-8 xl:grid-cols-[1fr_420px]">
@@ -405,44 +542,37 @@ function ProductsPanel({ products }: { products: ProductRow[] }) {
           <div className="flex items-center gap-2">
             <Tags size={18} />
             <h2 className="text-lg font-semibold text-[#111]">Products</h2>
+            <span className="text-xs text-[#6B6B6B]">{filtered.length} of {products.length}</span>
           </div>
           <form action={syncAction}>
             <SubmitButton icon={UploadCloud} variant="light">Sync Images</SubmitButton>
           </form>
         </div>
+
+        <div className="relative">
+          <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#9A938A]" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search products by name, brand, or id…"
+            className="w-full rounded-md border border-[#D8D1C8] bg-white py-2.5 pl-9 pr-3 text-sm text-[#111] outline-none transition focus:border-[#111]"
+          />
+        </div>
+
         <Notice state={syncState} />
+
         <div className="overflow-hidden rounded-md border border-[#E8E4DE] bg-white">
-          <div className="grid grid-cols-[1.2fr_0.8fr_110px_110px_120px_96px] gap-3 border-b border-[#E8E4DE] bg-[#FAFAF8] px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#6B6B6B] max-lg:hidden">
-            <span>Product</span>
-            <span>Tag</span>
-            <span>Price</span>
-            <span>Discount</span>
-            <span>Available</span>
-            <span />
-          </div>
-          <div className="divide-y divide-[#E8E4DE]">
-            {products.map((product) => (
-              <form
-                key={product.id}
-                action={updateProductAdmin}
-                className="grid gap-3 px-4 py-4 lg:grid-cols-[1.2fr_0.8fr_110px_110px_120px_96px] lg:items-center"
-              >
-                <input type="hidden" name="product_id" value={product.id} />
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-[#111]">{product.brand} · {product.name}</p>
-                  <p className="truncate text-xs text-[#6B6B6B]">{product.id}</p>
-                </div>
-                <input name="tag" defaultValue={product.tag ?? ""} placeholder="Tag" className={inputClass("mt-0")} />
-                <input name="price" type="number" min="0" step="1" defaultValue={money(product.price)} className={inputClass("mt-0")} />
-                <input name="discount_price" type="number" min="0" step="1" defaultValue={money(product.discount_price)} className={inputClass("mt-0")} />
-                <label className="flex items-center gap-2 text-sm text-[#111]">
-                  <input name="is_active" type="checkbox" defaultChecked={product.is_active} className="h-4 w-4 accent-[#111]" />
-                  {product.is_active ? "Yes" : "No"}
-                </label>
-                <SubmitButton icon={Save} variant="light">Save</SubmitButton>
-              </form>
-            ))}
-          </div>
+          {filtered.length === 0 ? (
+            <div className="p-8 text-center text-sm text-[#6B6B6B]">
+              {products.length === 0 ? "No products yet." : "No products match your search."}
+            </div>
+          ) : (
+            <div className="divide-y divide-[#E8E4DE]">
+              {filtered.map((product) => (
+                <ProductRowEditor key={product.id} product={product} />
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -466,19 +596,15 @@ function ProductsPanel({ products }: { products: ProductRow[] }) {
             <Label>Product id</Label>
             <input name="product_id" placeholder="optional-custom-slug" className={inputClass()} />
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div>
-              <Label>Price</Label>
-              <input name="price" required type="number" min="0" step="1" className={inputClass()} />
+          <div>
+            <Label>Size pricing</Label>
+            <div className="mt-1">
+              <SizePriceFields />
             </div>
-            <div>
-              <Label>Discount</Label>
-              <input name="discount_price" type="number" min="0" step="1" className={inputClass()} />
-            </div>
-            <div>
-              <Label>Rating</Label>
-              <input name="rating" type="number" min="0" max="5" step="0.1" defaultValue="4.5" className={inputClass()} />
-            </div>
+          </div>
+          <div>
+            <Label>Rating</Label>
+            <input name="rating" type="number" min="0" max="5" step="0.1" defaultValue="4.5" className={inputClass()} />
           </div>
           <div>
             <Label>Image path</Label>
@@ -625,25 +751,28 @@ function CollectionsPanel({ collections }: { collections: CollectionRow[] }) {
   );
 }
 
-export default function AdminDashboard({ role, imports, products, collections, candidates, jobs }: Props) {
+export default function AdminDashboard({ role, imports, products, collections, candidates, jobs, orders }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>("agent");
   const stats = useMemo(() => {
     const activeProducts = products.filter((product) => product.is_active).length;
-    const discountedProducts = products.filter((product) => product.discount_price != null).length;
+    const openOrders = orders.filter(
+      (o) => o.status !== "delivered" && o.status !== "cancelled" && o.status !== "refunded",
+    ).length;
     const pendingCandidates = candidates.filter((row) => row.status === "candidate").length;
     return [
       { label: "Products", value: products.length },
       { label: "Active", value: activeProducts },
+      { label: "Open Orders", value: openOrders },
+      { label: "Orders", value: orders.length },
       { label: "Candidates", value: pendingCandidates },
-      { label: "Drafts", value: imports.filter((row) => row.status !== "published").length },
-      { label: "Discounted", value: discountedProducts },
     ];
-  }, [candidates, imports, products]);
+  }, [candidates, orders, products]);
 
   const tabs: { id: TabId; label: string; icon: ComponentType<{ size?: number }> }[] = [
     { id: "agent", label: "Agent", icon: Bot },
     { id: "products", label: "Products", icon: Tags },
     { id: "collections", label: "Collections", icon: Layers3 },
+    { id: "orders", label: "Orders", icon: ShoppingCart },
   ];
 
   return (
@@ -695,6 +824,7 @@ export default function AdminDashboard({ role, imports, products, collections, c
         {activeTab === "agent" && <AgentPanel imports={imports} candidates={candidates} jobs={jobs} />}
         {activeTab === "products" && <ProductsPanel products={products} />}
         {activeTab === "collections" && <CollectionsPanel collections={collections} />}
+        {activeTab === "orders" && <OrdersPanel orders={orders} />}
       </div>
     </main>
   );

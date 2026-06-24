@@ -48,9 +48,50 @@ export type CheckoutAddressInput = {
   country: "IN";
 };
 
+export type PaymentMethodChoice = "razorpay" | "cod";
+
+/**
+ * A single direct-purchase ("Buy Now") line. When present on a checkout/quote
+ * request, the order is built from this product alone and the persistent cart
+ * is left untouched.
+ */
+export type BuyNowInput = {
+  productId: string;
+  sizeMl: BottleSize;
+  quantity?: number;
+};
+
 export type PlaceOrderInput = {
   address: CheckoutAddressInput;
+  paymentMethod: PaymentMethodChoice;
+  contactEmail?: string | null;
   notes?: string | null;
+  /** When set, checkout only this product instead of the whole cart. */
+  buyNow?: BuyNowInput | null;
+};
+
+/** Result of placing an order. For Razorpay, the client opens checkout with these. */
+export type PlaceOrderResult = {
+  orderId: string;
+  paymentMethod: PaymentMethodChoice;
+  razorpay?: {
+    orderId: string;
+    amount: number;     // paise
+    keyId: string;
+  };
+};
+
+export type ShippingQuoteOption = {
+  available: boolean;
+  charge: number;
+  etdDays: number | null;
+  courier: string | null;
+};
+
+export type ShippingQuoteResult = {
+  serviceable: boolean;
+  prepaid: ShippingQuoteOption;
+  cod: ShippingQuoteOption;
 };
 
 export type ReviewInput = {
