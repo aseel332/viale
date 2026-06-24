@@ -17,25 +17,26 @@ export default async function ProductDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const product = await getProductById(id);
-  if (!product) notFound();
 
-  // Fetch reviews from Supabase
+  // Product (cached catalogue), reviews, and the authenticated user are all
+  // independent — fetch them concurrently instead of waterfalling so the page
+  // is bound by the slowest single query rather than their sum.
   const supabase = await createClient();
-  const { data: reviews } = await supabase
-    .from("reviews")
-    .select(`
-      id, rating, title, body, is_verified_purchase, created_at,
-      profile:profiles(full_name, avatar_url)
-    `)
-    .eq("product_id", id)
-    .order("created_at", { ascending: false })
-    .limit(20);
+  const [product, { data: reviews }, { data: { user } }] = await Promise.all([
+    getProductById(id),
+    supabase
+      .from("reviews")
+      .select(`
+        id, rating, title, body, is_verified_purchase, created_at,
+        profile:profiles(full_name, avatar_url)
+      `)
+      .eq("product_id", id)
+      .order("created_at", { ascending: false })
+      .limit(20),
+    supabase.auth.getUser(),
+  ]);
 
-  // Fetch the authenticated user (revalidated, not just the cookie)
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  if (!product) notFound();
 
   // User's existing review + whether the product is already wishlisted
   let userReview: { id: string; rating: number; title: string | null; body: string | null } | null = null;

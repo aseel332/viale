@@ -1,10 +1,22 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, User, Menu, X, ShoppingBag } from "lucide-react";
+import { Search, User, Menu, X, ShoppingBag, Loader2 } from "lucide-react";
 import Logo from "./Logo";
+
+// Subtle, debounced spinner shown over a nav icon while its route loads.
+// Prefetched routes skip the pending state entirely, so this only appears on
+// slow networks where the loading.tsx shell hasn't arrived yet.
+function NavPending() {
+  const { pending } = useLinkStatus();
+  return (
+    <span aria-hidden className={`nav-pending ${pending ? "is-pending" : ""}`}>
+      {pending && <Loader2 strokeWidth={2} />}
+    </span>
+  );
+}
 
 const navLinks = [
   { label: "All",         href: "/" },
@@ -89,33 +101,42 @@ export default function Navbar({ isSignedIn = false, cartCount = 0 }: NavbarProp
             ))}
           </nav>
 
-          {/* Right icons */}
-          <div className="flex items-center gap-4">
-            <Link href="/search" aria-label="Search">
-              <Search
-                size={20}
-                strokeWidth={1.5}
-                className="text-[#111] hover:text-[#C9A86C] transition-colors"
-              />
+          {/* Right icons — larger tap targets + breathing room on mobile */}
+          <div className="flex items-center gap-1.5 sm:gap-1 -mr-2.5">
+            <Link
+              href="/search"
+              aria-label="Search"
+              className="relative inline-flex items-center justify-center p-2.5 text-[#111] hover:text-[#C9A86C] transition-colors"
+            >
+              <Search size={22} strokeWidth={1.5} />
+              <NavPending />
             </Link>
-            <Link href="/cart" aria-label="Shopping bag" className="relative">
-              <ShoppingBag
-                size={20}
-                strokeWidth={1.5}
-                className="text-[#111] hover:text-[#C9A86C] transition-colors"
-              />
-              {cartCount > 0 && (
-                <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#C9A86C] text-[#111] text-[9px] font-bold flex items-center justify-center">
-                  {cartCount > 9 ? "9+" : cartCount}
-                </span>
-              )}
+            <Link
+              href="/cart"
+              aria-label="Shopping bag"
+              className="relative inline-flex items-center justify-center p-2.5 text-[#111] hover:text-[#C9A86C] transition-colors"
+            >
+              <span className="relative inline-flex">
+                <ShoppingBag size={22} strokeWidth={1.5} />
+                {cartCount > 0 && (
+                  <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-[#C9A86C] text-[#111] text-[9px] font-bold flex items-center justify-center">
+                    {cartCount > 9 ? "9+" : cartCount}
+                  </span>
+                )}
+              </span>
+              <NavPending />
             </Link>
-            <Link href="/account" aria-label="Account" className="hidden md:block">
+            <Link
+              href="/account"
+              aria-label="Account"
+              className="relative hidden md:inline-flex items-center justify-center p-2.5 transition-colors hover:text-[#C9A86C]"
+            >
               <User
-                size={20}
+                size={22}
                 strokeWidth={1.5}
-                className={`transition-colors hover:text-[#C9A86C] ${isSignedIn ? "text-[#C9A86C]" : "text-[#111]"}`}
+                className={isSignedIn ? "text-[#C9A86C]" : "text-[#111]"}
               />
+              <NavPending />
             </Link>
           </div>
         </div>

@@ -68,6 +68,8 @@ function SetCard({
             <img
               src={item.imageSrc}
               alt={item.name}
+              loading="lazy"
+              decoding="async"
               className="h-full w-full object-contain transition-transform duration-500 group-hover:scale-105"
             />
           </div>

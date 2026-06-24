@@ -89,6 +89,8 @@ export default async function Home() {
               <img
                 src="/viale_decant.png"
                 alt="Viale Luxury Decant"
+                fetchPriority="high"
+                decoding="async"
                 className="relative w-full object-contain drop-shadow-xl"
               />
             </div>
@@ -204,6 +206,8 @@ export default async function Home() {
             <img
               src="/viale_decant.png"
               alt="Viale Luxury Decant"
+              fetchPriority="high"
+              decoding="async"
               className="max-h-[480px] object-contain animate-float animate-fade-in"
               style={{ animationDelay: "0.2s" }}
             />

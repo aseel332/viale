@@ -201,6 +201,8 @@ export default function ProductDetailClient({ product, reviews, isSignedIn, user
             <img
               src={product.imageSrc}
               alt={product.name}
+              fetchPriority="high"
+              decoding="async"
               className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
             />
           </div>
@@ -491,6 +493,8 @@ export default function ProductDetailClient({ product, reviews, isSignedIn, user
                           <img
                             src={profileData.avatar_url}
                             alt={name}
+                            loading="lazy"
+                            decoding="async"
                             className="w-9 h-9 rounded-full object-cover flex-shrink-0"
                           />
                         ) : (
