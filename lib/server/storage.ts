@@ -45,6 +45,62 @@ export async function uploadProductImageBuffer(
     .getPublicUrl(objectPath).data.publicUrl;
 }
 
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // matches the product-images bucket limit
+const ALLOWED_UPLOAD_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/avif",
+]);
+
+function extensionForUpload(file: File) {
+  if (file.type === "image/jpeg") return ".jpg";
+  if (file.type === "image/webp") return ".webp";
+  if (file.type === "image/avif") return ".avif";
+  return ".png";
+}
+
+export function uploadFileObjectPath(prefix: string, id: string, file: File) {
+  return `${prefix}/${id}${extensionForUpload(file)}`;
+}
+
+/** Uploads a browser-submitted image File to the product-images bucket. */
+export async function uploadImageFile(
+  supabase: SupabaseClient<Database>,
+  file: File,
+  objectPath: string,
+) {
+  if (!ALLOWED_UPLOAD_TYPES.has(file.type)) {
+    throw new Error("Image must be a JPEG, PNG, WebP or AVIF file.");
+  }
+  if (file.size > MAX_UPLOAD_BYTES) {
+    throw new Error("Image must be 10 MB or smaller.");
+  }
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+  return uploadProductImageBuffer(supabase, objectPath, buffer, file.type);
+}
+
+/**
+ * Best-effort removal of previously-uploaded public images. Accepts the public
+ * URLs we stored on a record and deletes the matching objects. Local public
+ * paths (e.g. "/collection_img.png") and non-bucket URLs are ignored.
+ */
+export async function removeProductImages(
+  supabase: SupabaseClient<Database>,
+  urls: (string | null | undefined)[],
+) {
+  const marker = `/${PRODUCT_IMAGES_BUCKET}/`;
+  const objectPaths = urls
+    .filter((url): url is string => Boolean(url) && url!.includes(marker))
+    .map((url) => url.slice(url.indexOf(marker) + marker.length))
+    .filter(Boolean);
+
+  if (objectPaths.length === 0) return;
+
+  await supabase.storage.from(PRODUCT_IMAGES_BUCKET).remove(objectPaths);
+}
+
 export function generatedPerfumeImageUploader(supabase: SupabaseClient<Database>) {
   return async ({ slug, b64, contentType }: { slug: string; b64: string; contentType: "image/png" }) => {
     return uploadProductImageBuffer(

@@ -33,6 +33,7 @@ export default async function CollectionDetailPage({
   if (!collection) notFound();
 
   const products = collection.products;
+  const items = collection.displayItems;
   const retail = storefrontCollectionRetailTotal(collection);
   const savings = Math.max(0, retail - collection.bundlePrice);
 
@@ -53,10 +54,10 @@ export default async function CollectionDetailPage({
       <section className="max-w-screen-xl mx-auto px-5 md:px-10 py-8 grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-start">
         {/* 2×2 preview grid */}
         <div className="grid grid-cols-2 gap-3 bg-white border border-[#E8E4DE] p-3">
-          {products.map((p) => (
-            <div key={p.id} className="aspect-[3/4] bg-[#F5F1EB] overflow-hidden">
+          {items.map((item, index) => (
+            <div key={`${item.name}-${index}`} className="aspect-[3/4] bg-[#F5F1EB] overflow-hidden">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={p.imageSrc} alt={p.name} className="w-full h-full object-cover" />
+              <img src={item.imageSrc} alt={item.name} className="w-full h-full object-cover" />
             </div>
           ))}
         </div>
@@ -81,13 +82,21 @@ export default async function CollectionDetailPage({
               4 Decants · 5ml each
             </p>
             <ul className="space-y-2">
-              {products.map((p) => (
-                <li key={p.id} className="flex items-center justify-between text-[13px]">
-                  <Link href={`/products/${p.id}`} className="text-[#111] hover:text-[#C9A86C] transition-colors">
-                    <span className="text-[#C9A86C] mr-2">↳</span>
-                    {p.name}
-                    <span className="text-[#6B6B6B] ml-2">/ {p.brand}</span>
-                  </Link>
+              {items.map((item, index) => (
+                <li key={`${item.name}-${index}`} className="flex items-center justify-between text-[13px]">
+                  {item.href ? (
+                    <Link href={item.href} className="text-[#111] hover:text-[#C9A86C] transition-colors">
+                      <span className="text-[#C9A86C] mr-2">↳</span>
+                      {item.name}
+                      <span className="text-[#6B6B6B] ml-2">/ {item.brand}</span>
+                    </Link>
+                  ) : (
+                    <span className="text-[#111]">
+                      <span className="text-[#C9A86C] mr-2">↳</span>
+                      {item.name}
+                      <span className="text-[#6B6B6B] ml-2">/ {item.brand}</span>
+                    </span>
+                  )}
                 </li>
               ))}
             </ul>
@@ -119,21 +128,23 @@ export default async function CollectionDetailPage({
         </div>
       </section>
 
-      {/* Explore the scents */}
-      <section className="max-w-screen-xl mx-auto px-5 md:px-10 py-16 border-t border-[#E8E4DE]">
-        <AnimateIn className="mb-8">
-          <h2 className="text-2xl md:text-3xl font-[family-name:var(--font-cormorant)] font-medium italic text-[#111]">
-            Explore the scents
-          </h2>
-        </AnimateIn>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-          {products.map((p, i) => (
-            <AnimateIn key={p.id} delay={i * 60} direction="up">
-              <ProductCard product={p} />
-            </AnimateIn>
-          ))}
-        </div>
-      </section>
+      {/* Explore the scents — only for product-backed collections */}
+      {products.length > 0 && (
+        <section className="max-w-screen-xl mx-auto px-5 md:px-10 py-16 border-t border-[#E8E4DE]">
+          <AnimateIn className="mb-8">
+            <h2 className="text-2xl md:text-3xl font-[family-name:var(--font-cormorant)] font-medium italic text-[#111]">
+              Explore the scents
+            </h2>
+          </AnimateIn>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+            {products.map((p, i) => (
+              <AnimateIn key={p.id} delay={i * 60} direction="up">
+                <ProductCard product={p} />
+              </AnimateIn>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

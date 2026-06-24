@@ -13,7 +13,7 @@ function SetCard({
   collection: StorefrontCollection;
   theme: "summer" | "winter" | "celebrity";
 }) {
-  const products = collection.products;
+  const items = collection.displayItems;
 
   const t = {
     summer: {
@@ -62,8 +62,8 @@ function SetCard({
 
       {/* 2×2 bottle grid */}
       <div className="grid grid-cols-2 gap-2 px-4 pt-4 pb-2">
-        {products.map((item) => (
-          <div key={item.id} className={`h-[88px] flex items-center justify-center ${t.tile} overflow-hidden`}>
+        {items.map((item, index) => (
+          <div key={`${item.name}-${index}`} className={`h-[88px] flex items-center justify-center ${t.tile} overflow-hidden`}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={item.imageSrc}
@@ -85,8 +85,8 @@ function SetCard({
         <div className={`mt-3 h-px ${t.div}`} />
 
         <div className="mt-2.5 space-y-1">
-          {products.map((item) => (
-            <p key={item.id} className={`text-[10px] ${t.list} leading-snug`}>
+          {items.map((item, index) => (
+            <p key={`${item.name}-${index}`} className={`text-[10px] ${t.list} leading-snug`}>
               <span className={`${t.arrow} mr-1.5`}>↳</span>
               {item.name}
               <span className={`${t.brand} ml-1`}>/ {item.brand}</span>

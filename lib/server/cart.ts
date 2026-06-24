@@ -212,7 +212,7 @@ export async function getCart(): Promise<CartSummary> {
         refId: collection.id,
         name: collection.name,
         brand: "Collection · Box of 4",
-        imageSrc: collection.products[0]?.imageSrc ?? "/collection_img.png",
+        imageSrc: collection.displayItems[0]?.imageSrc ?? "/collection_img.png",
         sizeMl: null,
         quantity: row.quantity,
         unitPrice,

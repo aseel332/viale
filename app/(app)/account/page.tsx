@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getStorefrontCollections, getStorefrontProducts } from "@/lib/catalog";
-import type { AddressRow, PaymentMethodRow } from "@/types/database";
+import type { AddressRow, PaymentMethod, PaymentStatus } from "@/types/database";
 import AuthPanel from "./AuthPanel";
 import AccountDashboard, { type OrderView, type WishlistView } from "./AccountDashboard";
 
@@ -28,7 +28,6 @@ export default async function AccountPage({
   const [
     { data: profile },
     { data: addresses },
-    { data: cards },
     { data: orderRows },
     { data: wishRows },
     products,
@@ -37,10 +36,9 @@ export default async function AccountPage({
     await Promise.all([
       supabase.from("profiles").select("full_name, phone").eq("id", user.id).maybeSingle(),
       supabase.from("addresses").select("*").eq("user_id", user.id).order("is_default", { ascending: false }).order("created_at", { ascending: true }),
-      supabase.from("payment_methods").select("*").eq("user_id", user.id).order("is_default", { ascending: false }).order("created_at", { ascending: false }),
       supabase
         .from("orders")
-        .select("id, status, total_amount, created_at, order_items(product_id, collection_id, size_ml, quantity, unit_price)")
+        .select("id, status, total_amount, created_at, payment_method, payment_status, order_items(product_id, collection_id, size_ml, quantity, unit_price)")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false }),
       supabase.from("wishlist_items").select("product_id, created_at").eq("user_id", user.id).order("created_at", { ascending: false }),
@@ -52,7 +50,7 @@ export default async function AccountPage({
   // The hand-written DB types declare empty Relationships, so the embedded
   // `order_items(...)` select isn't statically typed — cast to the known shape.
   type ItemRow = { product_id: string | null; collection_id: string | null; size_ml: number | null; quantity: number; unit_price: number };
-  type RawOrder = { id: string; status: string; total_amount: number; created_at: string; order_items: ItemRow[] | null };
+  type RawOrder = { id: string; status: string; total_amount: number; created_at: string; payment_method: PaymentMethod | null; payment_status: PaymentStatus; order_items: ItemRow[] | null };
   const rawOrders = (orderRows ?? []) as unknown as RawOrder[];
 
   const orders: OrderView[] = rawOrders.map((o) => {
@@ -82,6 +80,8 @@ export default async function AccountPage({
       status: o.status,
       total: Number(o.total_amount),
       createdAt: o.created_at,
+      paymentMethod: o.payment_method,
+      paymentStatus: o.payment_status,
       items,
     };
   });
@@ -103,7 +103,6 @@ export default async function AccountPage({
       fullName={profile?.full_name ?? ""}
       phone={profile?.phone ?? ""}
       addresses={(addresses as AddressRow[] | null) ?? []}
-      cards={(cards as PaymentMethodRow[] | null) ?? []}
       orders={orders}
       wishlist={wishlist}
       initialTab={initialTab}

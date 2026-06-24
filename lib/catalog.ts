@@ -17,6 +17,16 @@ const CATALOG_TTL_SECONDS = 300;
 const PRODUCTS_CACHE_KEY = "viale:catalog:products:v2";
 const COLLECTIONS_CACHE_KEY = "viale:catalog:collections:v1";
 
+// A single tile shown for a collection (the 2×2 grid + "what's inside" list).
+// Backed either by a real catalogue product (with a product page link) or by a
+// manual scent label entered in the admin.
+export type CollectionDisplayItem = {
+  name: string;
+  brand: string;
+  imageSrc: string;
+  href?: string;
+};
+
 export type StorefrontCollection = {
   id: string;
   number: string;
@@ -26,8 +36,10 @@ export type StorefrontCollection = {
   bundlePrice: number;
   category: SeasonCategory;
   isActive: boolean;
+  images: string[];                    // collection's own imagery (manual mode); empty otherwise
   productIds: string[];
-  products: Product[];
+  products: Product[];                 // real linked products; empty for manual collections
+  displayItems: CollectionDisplayItem[];
 };
 
 type CollectionJoinRow = CollectionRow & {
@@ -96,7 +108,19 @@ function staticCollectionProducts(collection: StaticCollection) {
     .filter((product): product is Product => Boolean(product));
 }
 
+// Builds the tile list: product-backed tiles link to product pages, with an
+// optional per-tile image override from the collection's own imagery.
+function displayItemsFromProducts(products: Product[], images: string[]): CollectionDisplayItem[] {
+  return products.map((product, index) => ({
+    name: product.name,
+    brand: product.brand,
+    imageSrc: images[index] || product.imageSrc,
+    href: `/products/${product.id}`,
+  }));
+}
+
 function collectionFromStatic(collection: StaticCollection): StorefrontCollection {
+  const products = staticCollectionProducts(collection);
   return {
     id: collection.id,
     number: collection.number,
@@ -106,8 +130,10 @@ function collectionFromStatic(collection: StaticCollection): StorefrontCollectio
     bundlePrice: collection.bundlePrice,
     category: collection.category,
     isActive: true,
+    images: [],
     productIds: collection.productIds,
-    products: staticCollectionProducts(collection),
+    products,
+    displayItems: displayItemsFromProducts(products, []),
   };
 }
 
@@ -116,6 +142,17 @@ function collectionFromRow(row: CollectionJoinRow): StorefrontCollection {
   const products = items
     .map((item) => item.product ? productFromRow(item.product) : null)
     .filter((product): product is Product => Boolean(product));
+  const images = row.image_paths ?? [];
+
+  // Product-backed collections derive tiles from their products; manual
+  // collections derive them from the uploaded images + hand-typed labels.
+  const displayItems = products.length > 0
+    ? displayItemsFromProducts(products, images)
+    : (row.manual_items ?? []).map((item, index) => ({
+        name: item.name,
+        brand: item.brand,
+        imageSrc: images[index] || "/collection_img.png",
+      }));
 
   return {
     id: row.id,
@@ -126,8 +163,10 @@ function collectionFromRow(row: CollectionJoinRow): StorefrontCollection {
     bundlePrice: Number(row.bundle_price),
     category: row.season_category,
     isActive: row.is_active,
+    images,
     productIds: items.map((item) => item.product_id),
     products,
+    displayItems,
   };
 }
 

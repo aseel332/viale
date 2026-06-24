@@ -14,11 +14,15 @@ import {
   generatedPerfumeImageUploader,
   isLocalPublicImage,
   publicImageObjectPath,
+  removeProductImages,
+  uploadFileObjectPath,
+  uploadImageFile,
   uploadLocalPublicImage,
 } from "@/lib/server/storage";
 import type { PerfumeDiscoveryItem, PerfumeDraftProduct } from "@/lib/perfume-agent/types";
 import type {
   CollectionInsert,
+  CollectionManualItem,
   Database,
   FragranceFamily,
   Gender,
@@ -54,6 +58,13 @@ function requiredField(formData: FormData, name: string, label: string) {
   const value = field(formData, name);
   if (!value) throw new Error(`${label} is required.`);
   return value;
+}
+
+// Reads an uploaded image File from the form. Empty file inputs arrive as a
+// zero-byte File (or empty string), so treat those as "not provided".
+function fileField(formData: FormData, name: string): File | null {
+  const value = formData.get(name);
+  return value instanceof File && value.size > 0 ? value : null;
 }
 
 function slug(value: string) {
@@ -603,15 +614,23 @@ export async function createManualProductAdmin(
       .map((value) => getEnum(typeof value === "string" ? value : "", SEASONS, "Spring"))
       .filter((season, index, list) => list.indexOf(season) === index);
 
+    const id = field(formData, "product_id") || slug(`${name}-${brand}`);
+
+    // Prefer an uploaded file; fall back to a pasted path, then the placeholder.
+    const upload = fileField(formData, "image");
+    const imagePath = upload
+      ? await uploadImageFile(supabase, upload, uploadFileObjectPath("catalog/products", id, upload))
+      : field(formData, "image_path") || "/collection_img.png";
+
     const product: ProductInsert = {
-      id: field(formData, "product_id") || slug(`${name}-${brand}`),
+      id,
       name,
       brand,
       price: basePrice,
       discount_price: baseDiscount,
       size_pricing: Object.keys(sizePricing).length > 0 ? sizePricing : null,
       rating: parseRating(field(formData, "rating")),
-      image_path: field(formData, "image_path") || "/collection_img.png",
+      image_path: imagePath,
       tag: field(formData, "tag") || null,
       notes,
       family: getEnum(field(formData, "family"), FAMILIES, "Fresh"),
@@ -636,25 +655,59 @@ export async function createManualProductAdmin(
   }
 }
 
-export async function createCollectionAdmin(
+async function revalidateCollections(collectionId?: string) {
+  await invalidateCatalogCache();
+  revalidatePath("/collections");
+  if (collectionId) revalidatePath(`/collections/${collectionId}`);
+  revalidatePath("/admin");
+}
+
+// Shared collection fields used by both creation modes.
+function readCollectionBase(formData: FormData): CollectionInsert {
+  const name = requiredField(formData, "name", "Collection name");
+  return {
+    id: field(formData, "collection_id") || slug(name),
+    number: requiredField(formData, "number", "Collection number"),
+    name,
+    subtitle: requiredField(formData, "subtitle", "Subtitle"),
+    description: requiredField(formData, "description", "Description"),
+    bundle_price: parseRequiredPrice(formData, "bundle_price", "Bundle price"),
+    season_category: getEnum(field(formData, "season_category"), COLLECTION_CATEGORIES, "summer"),
+    is_active: parseBoolean(formData, "is_active", true),
+  };
+}
+
+// Mode 1 — build a collection from 4 existing catalogue products. Their scent
+// info + images are reused on the storefront via collection_items.
+export async function createCollectionFromProductsAdmin(
   _previousState: AdminActionState,
   formData: FormData,
 ): Promise<AdminActionState> {
   try {
     const { supabase } = await requireAdmin();
-    const productIds = splitList(requiredField(formData, "product_ids", "Product ids")).slice(0, 4);
-    if (productIds.length !== 4) throw new Error("Collections need exactly 4 product ids.");
+    const productIds = formData
+      .getAll("product_ids")
+      .map((value) => (typeof value === "string" ? value.trim() : ""))
+      .filter(Boolean)
+      .filter((id, index, list) => list.indexOf(id) === index);
 
-    const name = requiredField(formData, "name", "Collection name");
+    if (productIds.length !== 4) throw new Error("Pick exactly 4 different products.");
+
+    // Make sure every selected product still exists before linking.
+    const { data: existing, error: lookupError } = await supabase
+      .from("products")
+      .select("id")
+      .in("id", productIds);
+
+    if (lookupError) throw new Error(lookupError.message);
+    const found = new Set((existing ?? []).map((row) => row.id));
+    const missing = productIds.filter((id) => !found.has(id));
+    if (missing.length > 0) throw new Error(`Unknown product id(s): ${missing.join(", ")}.`);
+
     const collection: CollectionInsert = {
-      id: field(formData, "collection_id") || slug(name),
-      number: requiredField(formData, "number", "Collection number"),
-      name,
-      subtitle: requiredField(formData, "subtitle", "Subtitle"),
-      description: requiredField(formData, "description", "Description"),
-      bundle_price: parseRequiredPrice(formData, "bundle_price", "Bundle price"),
-      season_category: getEnum(field(formData, "season_category"), COLLECTION_CATEGORIES, "summer"),
-      is_active: parseBoolean(formData, "is_active", true),
+      ...readCollectionBase(formData),
+      image_paths: [],
+      manual_items: null,
     };
 
     const { error: collectionError } = await supabase
@@ -680,12 +733,137 @@ export async function createCollectionAdmin(
 
     if (itemsError) throw new Error(itemsError.message);
 
-    await invalidateCatalogCache();
-    revalidatePath("/collections");
-    revalidatePath(`/collections/${collection.id}`);
-    revalidatePath("/admin");
+    await revalidateCollections(collection.id);
     return { message: `${collection.name} was saved.` };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Could not save collection." };
+  }
+}
+
+// Mode 2 — a fully manual collection: 4 uploaded images + 4 hand-typed scent
+// labels, with no link to catalogue products.
+export async function createManualCollectionAdmin(
+  _previousState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  try {
+    const { supabase } = await requireAdmin();
+    const base = readCollectionBase(formData);
+
+    const manualItems: CollectionManualItem[] = [];
+    const files: File[] = [];
+    for (let index = 1; index <= 4; index += 1) {
+      const itemName = requiredField(formData, `item_name_${index}`, `Scent ${index} name`);
+      const itemBrand = requiredField(formData, `item_brand_${index}`, `Scent ${index} brand`);
+      const file = fileField(formData, `image_${index}`);
+      if (!file) throw new Error(`Image ${index} is required.`);
+      manualItems.push({ name: itemName, brand: itemBrand });
+      files.push(file);
+    }
+
+    const imagePaths: string[] = [];
+    for (let index = 0; index < files.length; index += 1) {
+      const objectPath = uploadFileObjectPath(
+        `catalog/collections/${base.id}`,
+        String(index + 1),
+        files[index],
+      );
+      imagePaths.push(await uploadImageFile(supabase, files[index], objectPath));
+    }
+
+    const collection: CollectionInsert = {
+      ...base,
+      image_paths: imagePaths,
+      manual_items: manualItems,
+    };
+
+    const { error: collectionError } = await supabase
+      .from("collections")
+      .upsert(collection, { onConflict: "id" });
+
+    if (collectionError) throw new Error(collectionError.message);
+
+    // A manual collection owns no product links; clear any left from a prior mode.
+    const { error: deleteError } = await supabase
+      .from("collection_items")
+      .delete()
+      .eq("collection_id", collection.id);
+
+    if (deleteError) throw new Error(deleteError.message);
+
+    await revalidateCollections(collection.id);
+    return { message: `${collection.name} was saved.` };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not save collection." };
+  }
+}
+
+export async function deleteProductAdmin(
+  _previousState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  try {
+    const { supabase } = await requireAdmin();
+    const productId = requiredField(formData, "product_id", "Product id");
+
+    // Block deletion while the product is part of any collection so we never
+    // silently break a box of 4.
+    const { data: usedIn, error: usageError } = await supabase
+      .from("collection_items")
+      .select("collection_id")
+      .eq("product_id", productId);
+
+    if (usageError) throw new Error(usageError.message);
+    if (usedIn && usedIn.length > 0) {
+      const collections = [...new Set(usedIn.map((row) => row.collection_id))].join(", ");
+      return {
+        error: `Remove this product from collection(s) ${collections} before deleting it.`,
+      };
+    }
+
+    const { data: deleted, error } = await supabase
+      .from("products")
+      .delete()
+      .eq("id", productId)
+      .select("image_path")
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    if (deleted?.image_path) {
+      await removeProductImages(supabase, [deleted.image_path]).catch(() => undefined);
+    }
+
+    await revalidateCatalog(productId);
+    return { message: `Deleted ${productId}.` };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not delete product." };
+  }
+}
+
+export async function deleteCollectionAdmin(
+  _previousState: AdminActionState,
+  formData: FormData,
+): Promise<AdminActionState> {
+  try {
+    const { supabase } = await requireAdmin();
+    const collectionId = requiredField(formData, "collection_id", "Collection id");
+
+    // collection_items cascade via FK; capture uploaded imagery for cleanup.
+    const { data: deleted, error } = await supabase
+      .from("collections")
+      .delete()
+      .eq("id", collectionId)
+      .select("image_paths")
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    if (deleted?.image_paths?.length) {
+      await removeProductImages(supabase, deleted.image_paths).catch(() => undefined);
+    }
+
+    await revalidateCollections(collectionId);
+    return { message: `Deleted ${collectionId}.` };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not delete collection." };
   }
 }

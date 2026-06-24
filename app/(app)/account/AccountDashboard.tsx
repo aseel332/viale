@@ -5,14 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   User, MapPin, CreditCard, Package, Heart, LogOut, Loader2, Trash2, Plus, Check, Pencil,
+  Lock, ShieldCheck,
 } from "lucide-react";
 import { signOut } from "@/app/actions/auth";
 import {
-  updateContactInfo, addPaymentMethod, deletePaymentMethod, setDefaultPaymentMethod,
-  removeFromWishlist, type ActionState,
+  updateContactInfo, removeFromWishlist, type ActionState,
 } from "@/app/actions/account";
 import { deleteAddress, setDefaultAddress } from "@/app/actions/addresses";
-import type { AddressRow, PaymentMethodRow } from "@/types/database";
+import type { AddressRow, PaymentMethod, PaymentStatus } from "@/types/database";
 import { formatPrice } from "@/lib/product-utils";
 import AddressFormModal from "@/components/account/AddressFormModal";
 
@@ -22,6 +22,8 @@ export interface OrderView {
   status: string;
   total: number;
   createdAt: string;
+  paymentMethod: PaymentMethod | null;
+  paymentStatus: PaymentStatus;
   items: { label: string; sub: string; qty: number; lineTotal: number; imageSrc: string }[];
 }
 export interface WishlistView {
@@ -37,7 +39,6 @@ interface Props {
   fullName: string;
   phone: string;
   addresses: AddressRow[];
-  cards: PaymentMethodRow[];
   orders: OrderView[];
   wishlist: WishlistView[];
   initialTab?: TabKey;
@@ -110,7 +111,7 @@ export default function AccountDashboard(props: Props) {
             {tab === "profile"  && <ProfilePanel {...props} />}
             {tab === "addresses" && <AddressesPanel addresses={props.addresses} />}
             {tab === "orders"   && <OrdersPanel orders={props.orders} />}
-            {tab === "payment"  && <PaymentPanel cards={props.cards} />}
+            {tab === "payment"  && <PaymentPanel orders={props.orders} />}
             {tab === "wishlist" && <WishlistPanel wishlist={props.wishlist} />}
           </div>
         </div>
@@ -406,129 +407,86 @@ function OrdersPanel({ orders }: { orders: OrderView[] }) {
   );
 }
 
-// ── Payment methods ────────────────────────────────────────────────────────────
-function PaymentPanel({ cards }: { cards: PaymentMethodRow[] }) {
-  const router = useRouter();
-  const [state, formAction] = useActionState(addPaymentMethod, initialState);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [, startTransition] = useTransition();
-  const [formPending, startFormTransition] = useTransition();
+// ── Payment & transactions ──────────────────────────────────────────────────────
+const PAYMENT_STATUS_STYLE: Record<PaymentStatus, { label: string; className: string }> = {
+  paid: { label: "Paid", className: "bg-[#EAF4EA] text-[#2A5A2A]" },
+  pending: { label: "Pending", className: "bg-[#FBF3E0] text-[#8B6A14]" },
+  failed: { label: "Failed", className: "bg-[#F7E6E6] text-[#8B1A1A]" },
+  refunded: { label: "Refunded", className: "bg-[#F0EDE8] text-[#6B6B6B]" },
+};
 
-  // Show the inline "add card" form when there are no saved cards, or when the
-  // user opts in. Once the first card is saved, the refreshed `cards` prop
-  // (cards.length > 0) collapses it automatically.
-  const [addRequested, setAddRequested] = useState(false);
-  const showForm = cards.length === 0 || addRequested;
-  const setShowForm = setAddRequested;
+function methodLabel(method: PaymentMethod | null): string {
+  if (method === "cod") return "Cash on Delivery";
+  if (method === "razorpay") return "Online · Razorpay";
+  return "—";
+}
 
-  function remove(id: string) {
-    setBusyId(id);
-    startTransition(async () => {
-      await deletePaymentMethod(id);
-      router.refresh();
-      setBusyId(null);
-    });
-  }
-  function makeDefault(id: string) {
-    setBusyId(id);
-    startTransition(async () => {
-      await setDefaultPaymentMethod(id);
-      router.refresh();
-      setBusyId(null);
-    });
-  }
-
-  const thisYear = new Date().getFullYear();
-
+function PaymentPanel({ orders }: { orders: OrderView[] }) {
   return (
     <div className="space-y-4">
+      {/* How payments work — saved cards are handled by Razorpay, never stored here */}
       <div className="bg-white border border-[#E8E4DE] p-6 md:p-8">
-        <div className="flex items-center justify-between mb-1">
-          <h2 className="text-[11px] tracking-[0.2em] uppercase font-semibold text-[#111]">Payment Methods</h2>
-          {!showForm && (
-            <button
-              onClick={() => setShowForm(true)}
-              className="flex items-center gap-1.5 text-[11px] tracking-[0.1em] uppercase text-[#111] hover:text-[#C9A86C] transition-colors"
-            >
-              <Plus size={14} /> Add Card
-            </button>
-          )}
+        <div className="flex items-center gap-2 mb-3">
+          <ShieldCheck size={16} strokeWidth={1.5} className="text-[#C9A86C]" />
+          <h2 className="text-[11px] tracking-[0.2em] uppercase font-semibold text-[#111]">How You Pay</h2>
         </div>
-        <p className="text-[12px] text-[#6B6B6B] mb-6">
-          Cards are stored for display only (brand, last 4, expiry). No full card number is ever saved.
+        <p className="text-[13px] leading-relaxed text-[#6B6B6B]">
+          Payments are processed securely by <span className="text-[#111] font-medium">Razorpay</span>.
+          We never see or store your card details — your bank and card network keep them safe. If you
+          choose to save a card, it&apos;s done inside Razorpay&apos;s secure payment window at checkout
+          and protected with an OTP.
         </p>
-
-        {cards.length === 0 && !showForm && (
-          <p className="text-[13px] text-[#6B6B6B] py-4">No saved cards yet.</p>
-        )}
-
-        <div className="space-y-3">
-          {cards.map((card) => (
-            <div
-              key={card.id}
-              className={`flex items-center gap-3 p-4 border transition-opacity ${busyId === card.id ? "opacity-50" : ""} border-[#E8E4DE]`}
-            >
-              <CreditCard size={18} strokeWidth={1.5} className="text-[#6B6B6B]" />
-              <div className="flex-1 min-w-0">
-                <p className="text-[13px] text-[#111] font-medium">
-                  {card.brand} ···· {card.last4}
-                  {card.is_default && (
-                    <span className="ml-2 text-[9px] tracking-[0.12em] uppercase text-[#C9A86C]">Default</span>
-                  )}
-                </p>
-                <p className="text-[11px] text-[#6B6B6B]">
-                  {card.cardholder_name} · Exp {String(card.exp_month).padStart(2, "0")}/{String(card.exp_year).slice(-2)}
-                </p>
-              </div>
-              {!card.is_default && (
-                <button
-                  onClick={() => makeDefault(card.id)}
-                  disabled={busyId === card.id}
-                  className="text-[10px] tracking-[0.1em] uppercase text-[#6B6B6B] hover:text-[#111] transition-colors"
-                >
-                  Make default
-                </button>
-              )}
-              <button
-                onClick={() => remove(card.id)}
-                disabled={busyId === card.id}
-                className="text-[#B0ADA8] hover:text-[#111] transition-colors"
-                aria-label="Remove card"
-              >
-                <Trash2 size={15} strokeWidth={1.5} />
-              </button>
-            </div>
+        <div className="mt-5 flex flex-wrap gap-2">
+          {["UPI", "Cards", "Net Banking", "Wallets", "Cash on Delivery"].map((m) => (
+            <span key={m} className="text-[10px] tracking-[0.1em] uppercase text-[#6B6B6B] border border-[#E8E4DE] px-3 py-1.5">
+              {m}
+            </span>
           ))}
         </div>
+        <p className="mt-5 flex items-center gap-1.5 text-[11px] text-[#6B6B6B]">
+          <Lock size={12} strokeWidth={1.5} /> PCI-DSS compliant · 256-bit encrypted
+        </p>
+      </div>
 
-        {showForm && (
-          <form action={(fd) => startFormTransition(() => formAction(fd))} className="mt-5 pt-5 border-t border-[#E8E4DE] space-y-4">
-            {state?.error && <Banner kind="error">{state.error}</Banner>}
-            <LabeledInput label="Cardholder Name" name="cardholder_name" placeholder="Jane Doe" />
-            <LabeledInput label="Card Number" name="card_number" placeholder="4242 4242 4242 4242" inputMode="numeric" />
-            <div className="grid grid-cols-2 gap-4">
-              <LabeledInput label="Exp. Month (MM)" name="exp_month" placeholder="04" inputMode="numeric" />
-              <LabeledInput label="Exp. Year (YYYY)" name="exp_year" placeholder={String(thisYear + 2)} inputMode="numeric" />
-            </div>
-            <div className="flex gap-3">
-              <button
-                type="submit"
-                disabled={formPending}
-                className="bg-[#111] text-white text-[11px] tracking-[0.2em] uppercase px-8 py-3.5 hover:bg-[#333] transition-colors disabled:opacity-60 flex items-center gap-2"
-              >
-                {formPending && <Loader2 size={14} className="animate-spin" />} Save Card
-              </button>
-              {cards.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setShowForm(false)}
-                  className="text-[11px] tracking-[0.15em] uppercase text-[#6B6B6B] hover:text-[#111] transition-colors px-4"
+      {/* Transaction history */}
+      <div className="bg-white border border-[#E8E4DE] p-6 md:p-8">
+        <div className="flex items-center gap-2 mb-5">
+          <CreditCard size={16} strokeWidth={1.5} />
+          <h2 className="text-[11px] tracking-[0.2em] uppercase font-semibold text-[#111]">Payment History</h2>
+        </div>
+
+        {orders.length === 0 ? (
+          <p className="text-[13px] text-[#6B6B6B] py-2">No transactions yet.</p>
+        ) : (
+          <div className="divide-y divide-[#E8E4DE]">
+            {orders.map((order) => {
+              const status = PAYMENT_STATUS_STYLE[order.paymentStatus] ?? PAYMENT_STATUS_STYLE.pending;
+              return (
+                <Link
+                  key={order.id}
+                  href={`/account/orders/${order.id}`}
+                  className="flex items-center justify-between gap-3 py-4 transition-colors hover:bg-[#FAFAF8] -mx-2 px-2"
                 >
-                  Cancel
-                </button>
-              )}
-            </div>
-          </form>
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-medium text-[#111] truncate">
+                      Order #{order.id.slice(0, 8).toUpperCase()}
+                    </p>
+                    <p className="text-[11px] text-[#6B6B6B]">
+                      {new Date(order.createdAt).toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" })}
+                      {" · "}
+                      {methodLabel(order.paymentMethod)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <span className={`text-[9px] tracking-[0.15em] uppercase px-2.5 py-1 ${status.className}`}>
+                      {status.label}
+                    </span>
+                    <span className="text-[14px] font-semibold text-[#111] tabular-nums">{formatPrice(order.total)}</span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
         )}
       </div>
     </div>

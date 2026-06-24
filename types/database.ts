@@ -84,18 +84,6 @@ export type AddressRow = {
   updated_at: string;
 };
 
-export type PaymentMethodRow = {
-  id: string;
-  user_id: string;
-  brand: string;                // "Visa", "Mastercard", …
-  last4: string;                // 4 digits
-  exp_month: number;            // 1–12
-  exp_year: number;
-  cardholder_name: string;
-  is_default: boolean;
-  created_at: string;
-};
-
 export type PerfumeImportStatus = "draft" | "ready" | "failed" | "published" | "rejected";
 export type PerfumeDiscoveryJobStatus = "queued" | "running" | "complete" | "failed";
 export type PerfumeCandidateStatus =
@@ -181,6 +169,12 @@ export type ProductRow = {
   updated_at: string;
 };
 
+/** A manually-entered scent label for a collection not backed by catalogue products. */
+export type CollectionManualItem = {
+  name: string;
+  brand: string;
+};
+
 export type CollectionRow = {
   id: string;                   // slug e.g. "summer-01"
   number: string;               // "01", "02", …
@@ -189,6 +183,8 @@ export type CollectionRow = {
   description: string;
   bundle_price: number;
   season_category: SeasonCategory;
+  image_paths: string[];        // up to 4 collection display images; empty for product-backed sets
+  manual_items: CollectionManualItem[] | null;  // 4 scent labels for manual collections; null otherwise
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -300,14 +296,15 @@ export type ReviewRow = {
 export type ProfileInsert = Omit<ProfileRow, "created_at" | "updated_at">;
 export type AdminUserInsert = Omit<AdminUserRow, "created_at">;
 export type AddressInsert = Omit<AddressRow, "id" | "created_at" | "updated_at">;
-export type PaymentMethodInsert = Omit<PaymentMethodRow, "id" | "created_at">;
 export type PerfumeImportInsert = Omit<PerfumeImportRow, "id" | "created_at" | "updated_at">;
 export type PerfumeDiscoveryJobInsert = Omit<PerfumeDiscoveryJobRow, "id" | "created_at" | "updated_at">;
 export type PerfumeCandidateInsert = Omit<PerfumeCandidateRow, "id" | "created_at" | "updated_at">;
 export type ProductInsert =
   Omit<ProductRow, "created_at" | "updated_at" | "weight_g"> &
   Partial<Pick<ProductRow, "weight_g">>;
-export type CollectionInsert = Omit<CollectionRow, "created_at" | "updated_at">;
+export type CollectionInsert =
+  Omit<CollectionRow, "created_at" | "updated_at" | "image_paths" | "manual_items"> &
+  Partial<Pick<CollectionRow, "image_paths" | "manual_items">>;
 export type CollectionItemInsert = Omit<CollectionItemRow, "id" | "created_at">;
 // New payment/fulfillment columns all have DB defaults or are nullable, so they
 // are optional at insert time; only the original core fields are required.
@@ -346,7 +343,6 @@ export type ReviewInsert =
 export type ProfileUpdate = Partial<Omit<ProfileRow, "id" | "created_at">>;
 export type AdminUserUpdate = Partial<Omit<AdminUserRow, "user_id" | "created_at">>;
 export type AddressUpdate = Partial<Omit<AddressRow, "id" | "user_id" | "created_at" | "updated_at">>;
-export type PaymentMethodUpdate = Partial<Omit<PaymentMethodRow, "id" | "user_id" | "created_at">>;
 export type PerfumeImportUpdate = Partial<Omit<PerfumeImportRow, "id" | "created_at" | "updated_at">>;
 export type PerfumeDiscoveryJobUpdate = Partial<Omit<PerfumeDiscoveryJobRow, "id" | "created_at" | "updated_at">>;
 export type PerfumeCandidateUpdate = Partial<Omit<PerfumeCandidateRow, "id" | "created_at" | "updated_at">>;
@@ -421,12 +417,6 @@ export type Database = {
         Row: AddressRow;
         Insert: AddressInsert;
         Update: AddressUpdate;
-        Relationships: [];
-      };
-      payment_methods: {
-        Row: PaymentMethodRow;
-        Insert: PaymentMethodInsert;
-        Update: PaymentMethodUpdate;
         Relationships: [];
       };
       perfume_imports: {
