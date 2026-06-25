@@ -17,6 +17,7 @@ import {
   Search,
   ShoppingCart,
   Sparkles,
+  Star,
   Tags,
   Trash2,
   UploadCloud,
@@ -551,6 +552,12 @@ function ProductRowEditor({ product }: { product: ProductRow }) {
         >
           {product.is_active ? "Live" : "Hidden"}
         </span>
+        {product.is_top_pick && (
+          <span className="inline-flex items-center gap-1 rounded-full border border-[#E8D5A3] bg-[#FBF5E6] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#9A7B2E]">
+            <Star size={11} className="fill-[#C9A86C] text-[#C9A86C]" />
+            Top Pick
+          </span>
+        )}
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
@@ -576,6 +583,24 @@ function ProductRowEditor({ product }: { product: ProductRow }) {
               <input name="is_active" type="checkbox" defaultChecked={product.is_active} className="h-4 w-4 accent-[#111]" />
               Available on storefront
             </label>
+            <div className="rounded-md border border-[#E8E4DE] bg-white p-3">
+              <label className="flex items-center gap-2 text-sm font-medium text-[#111]">
+                <input name="is_top_pick" type="checkbox" defaultChecked={product.is_top_pick} className="h-4 w-4 accent-[#C9A86C]" />
+                Feature in home Top Picks
+              </label>
+              <div className="mt-2">
+                <Label>Display order</Label>
+                <input
+                  name="top_pick_order"
+                  type="number"
+                  min="0"
+                  step="1"
+                  defaultValue={product.top_pick_order ?? 0}
+                  className={inputClass()}
+                />
+                <p className="mt-1 text-[11px] text-[#6B6B6B]">Lower numbers show first in the &ldquo;Most Loved&rdquo; row.</p>
+              </div>
+            </div>
             <SubmitButton icon={Save}>Save Changes</SubmitButton>
           </div>
         </form>

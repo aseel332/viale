@@ -139,6 +139,11 @@ function parseRating(raw: string) {
   return Math.max(0, Math.min(5, Math.round(value * 10) / 10));
 }
 
+function parseOrder(raw: string | null) {
+  const value = Math.trunc(Number(raw ?? ""));
+  return Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
 function parseBoolean(formData: FormData, name: string, defaultValue = false) {
   const values = formData.getAll(name);
   const value = values.length > 0 ? values[values.length - 1] : null;
@@ -538,6 +543,8 @@ export async function updateProductAdmin(formData: FormData) {
       size_pricing: Object.keys(sizePricing).length > 0 ? sizePricing : null,
       tag: field(formData, "tag") || null,
       is_active: parseBoolean(formData, "is_active", false),
+      is_top_pick: parseBoolean(formData, "is_top_pick", false),
+      top_pick_order: parseOrder(field(formData, "top_pick_order")),
     })
     .eq("id", productId);
 

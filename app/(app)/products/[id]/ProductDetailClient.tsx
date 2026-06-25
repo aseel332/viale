@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Heart, ShoppingBag, ChevronDown, ChevronUp, Check } from "lucide-react";
+import { Heart, ShoppingBag, ChevronDown, ChevronUp, Check, ArrowLeft } from "lucide-react";
 import {
   BOTTLE_SIZES,
   resolveSizePrice,
@@ -163,8 +163,21 @@ export default function ProductDetailClient({ product, reviews, isSignedIn, user
 
   return (
     <div className="min-h-screen bg-[#FAFAF8]">
-      {/* Breadcrumb */}
+      {/* Back + Breadcrumb */}
       <div className="max-w-screen-xl mx-auto px-5 md:px-10 pt-28 pb-4">
+        <button
+          type="button"
+          onClick={() => {
+            if (window.history.length > 1) router.back();
+            else router.push("/#all-decants");
+          }}
+          className="group mb-4 inline-flex items-center gap-2 text-[11px] tracking-[0.18em] uppercase text-[#6B6B6B] transition-colors hover:text-[#111]"
+        >
+          <span className="flex h-7 w-7 items-center justify-center rounded-full border border-[#E8E4DE] bg-white transition-colors group-hover:border-[#111]">
+            <ArrowLeft size={14} className="transition-transform group-hover:-translate-x-0.5" />
+          </span>
+          Back
+        </button>
         <nav className="flex items-center gap-2 text-[11px] tracking-[0.1em] uppercase text-[#6B6B6B]">
           <Link href="/" className="hover:text-[#111] transition-colors">Home</Link>
           <span>/</span>

@@ -4,9 +4,11 @@ import CollectionCard from "@/components/shopping/CollectionCard";
 import { AnimateIn } from "@/components/AnimateIn";
 import ProductBrowser from "@/components/shopping/ProductBrowser";
 import { effectiveBasePrice, formatPrice } from "@/lib/product-utils";
-import { getStorefrontProducts } from "@/lib/catalog";
+import { getStorefrontProducts, getTopPicks } from "@/lib/catalog";
 
 // ── Seed data ────────────────────────────────────────────────
+// Fallback Top Picks shown only until the admin curates the list in the
+// dashboard (Products → "Feature in Top Picks").
 const topPickIds = ["sauvage-dior", "tobacco-vanille-tf", "aventus-creed"];
 
 const collections = [
@@ -48,9 +50,7 @@ export default async function Home() {
   const lowestBasePrice = products.length > 0 ? Math.min(...products.map(effectiveBasePrice)) : 0;
   const fromPrice = formatPrice(lowestBasePrice);
   const whyItems = buildWhyItems(fromPrice);
-  const topPicks = topPickIds
-    .map((id) => products.find((p) => p.id === id))
-    .filter((p): p is (typeof products)[number] => Boolean(p));
+  const topPicks = await getTopPicks(topPickIds);
 
   return (
     <>

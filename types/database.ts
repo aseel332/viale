@@ -164,6 +164,8 @@ export type ProductRow = {
   bottle_sizes: number[];       // available ml sizes e.g. [5, 10, 30]
   weight_g: number;             // per-unit shipping weight in grams
   is_active: boolean;
+  is_top_pick: boolean;         // featured in the home "Top Picks" carousel
+  top_pick_order: number;       // display order within the Top Picks row (asc)
   source_import_id: string | null;
   created_at: string;
   updated_at: string;
@@ -300,8 +302,8 @@ export type PerfumeImportInsert = Omit<PerfumeImportRow, "id" | "created_at" | "
 export type PerfumeDiscoveryJobInsert = Omit<PerfumeDiscoveryJobRow, "id" | "created_at" | "updated_at">;
 export type PerfumeCandidateInsert = Omit<PerfumeCandidateRow, "id" | "created_at" | "updated_at">;
 export type ProductInsert =
-  Omit<ProductRow, "created_at" | "updated_at" | "weight_g"> &
-  Partial<Pick<ProductRow, "weight_g">>;
+  Omit<ProductRow, "created_at" | "updated_at" | "weight_g" | "is_top_pick" | "top_pick_order"> &
+  Partial<Pick<ProductRow, "weight_g" | "is_top_pick" | "top_pick_order">>;
 export type CollectionInsert =
   Omit<CollectionRow, "created_at" | "updated_at" | "image_paths" | "manual_items"> &
   Partial<Pick<CollectionRow, "image_paths" | "manual_items">>;

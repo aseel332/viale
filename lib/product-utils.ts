@@ -79,6 +79,8 @@ export interface Product {
   longDescription: string;
   bottleSizes: BottleSize[];
   isAvailable?: boolean;
+  isTopPick?: boolean;
+  topPickOrder?: number;
 }
 
 export function effectiveBasePrice(product: Pick<Product, "price" | "discountPrice">): number {

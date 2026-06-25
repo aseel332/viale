@@ -99,6 +99,8 @@ export function productFromRow(row: ProductRow): Product {
     longDescription: row.long_description || row.description,
     bottleSizes: bottleSizes.length > 0 ? bottleSizes : [5, 10, 30],
     isAvailable: row.is_active,
+    isTopPick: row.is_top_pick ?? false,
+    topPickOrder: row.top_pick_order ?? 0,
   };
 }
 
@@ -191,6 +193,22 @@ export async function getStorefrontProducts(): Promise<Product[]> {
 export async function getProductById(id: string): Promise<Product | null> {
   const products = await getStorefrontProducts();
   return products.find((product) => product.id === id) ?? null;
+}
+
+// Products the admin has flagged for the home "Top Picks" carousel, ordered by
+// top_pick_order (ties preserve catalogue order, i.e. created_at). When nothing
+// is curated yet, falls back to the supplied seed ids so the row never empties.
+export async function getTopPicks(fallbackIds: string[] = []): Promise<Product[]> {
+  const products = await getStorefrontProducts();
+  const flagged = products
+    .filter((product) => product.isTopPick)
+    .sort((a, b) => (a.topPickOrder ?? 0) - (b.topPickOrder ?? 0));
+
+  if (flagged.length > 0) return flagged;
+
+  return fallbackIds
+    .map((id) => products.find((product) => product.id === id))
+    .filter((product): product is Product => Boolean(product));
 }
 
 export async function getStorefrontCollections(): Promise<StorefrontCollection[]> {
