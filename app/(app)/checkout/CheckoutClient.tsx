@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Loader2, Lock, Truck, Wallet, CreditCard, MapPin, Plus, Pencil, Check,
+  Loader2, Lock, Truck, Wallet, CreditCard, MapPin, Plus, Pencil, Check, AlertCircle, RefreshCw, X,
 } from "lucide-react";
-import { getShippingQuote, placeOrder, verifyPayment } from "@/lib/client/commerce-api";
+import { getShippingQuote, placeOrder, verifyPayment, getPaymentStatus, abandonPayment } from "@/lib/client/commerce-api";
 import type { BuyNowInput, CartLine, PaymentMethodChoice, ShippingQuoteResult } from "@/types/commerce";
 import type { AddressRow } from "@/types/database";
 import { formatPrice } from "@/lib/product-utils";
@@ -30,6 +30,9 @@ type RazorpayResponse = {
   razorpay_order_id: string;
   razorpay_signature: string;
 };
+type RazorpayFailure = {
+  error?: { description?: string; reason?: string; metadata?: { payment_id?: string } };
+};
 type RazorpayOptions = {
   key: string;
   amount: number;
@@ -42,12 +45,21 @@ type RazorpayOptions = {
   handler: (response: RazorpayResponse) => void;
   modal?: { ondismiss?: () => void };
 };
-type RazorpayInstance = { open: () => void };
+type RazorpayInstance = {
+  open: () => void;
+  on: (event: "payment.failed", handler: (response: RazorpayFailure) => void) => void;
+};
 declare global {
   interface Window {
     Razorpay?: new (options: RazorpayOptions) => RazorpayInstance;
   }
 }
+
+type RazorpayParams = { orderId: string; amount: number; keyId: string };
+
+// Survives a refresh so an in-progress payment can be resumed rather than
+// orphaned (which would create a duplicate order on retry).
+const PENDING_PAYMENT_KEY = "viale_pending_payment";
 
 const RAZORPAY_SCRIPT = "https://checkout.razorpay.com/v1/checkout.js";
 
@@ -61,6 +73,28 @@ function loadRazorpay(): Promise<boolean> {
     script.onerror = () => resolve(false);
     document.body.appendChild(script);
   });
+}
+
+function persistPendingPayment(orderId: string) {
+  try {
+    sessionStorage.setItem(PENDING_PAYMENT_KEY, orderId);
+  } catch {
+    /* storage unavailable (private mode) — webhook + reconciliation still cover us */
+  }
+}
+function readPendingPayment(): string | null {
+  try {
+    return sessionStorage.getItem(PENDING_PAYMENT_KEY);
+  } catch {
+    return null;
+  }
+}
+function clearPendingPayment() {
+  try {
+    sessionStorage.removeItem(PENDING_PAYMENT_KEY);
+  } catch {
+    /* ignore */
+  }
 }
 
 function formatAddressLine(a: AddressRow): string {
@@ -110,6 +144,13 @@ export default function CheckoutClient({
   const [formError, setFormError] = useState(error ?? "");
   const [isPending, startTransition] = useTransition();
 
+  // A payment that can be resumed/retried on the same Razorpay order — either
+  // recovered after a refresh ("resume") or after a failed/cancelled attempt
+  // ("failed"). Reusing the order prevents duplicate/orphaned orders.
+  const [recovery, setRecovery] = useState<
+    { orderId: string; razorpay: RazorpayParams; reason: "failed" | "cancelled" | "resume"; detail?: string } | null
+  >(null);
+
   const postalCode = selectedAddress?.postal_code?.trim() ?? "";
 
   const fetchQuote = useCallback(async (code: string) => {
@@ -146,6 +187,32 @@ export default function CheckoutClient({
     return () => clearTimeout(timer);
   }, [postalCode, fetchQuote]);
 
+  // On mount, recover any payment left in progress by a refresh/closed tab. The
+  // status endpoint reconciles against Razorpay first, so a payment that did go
+  // through is detected here and the buyer is sent straight to confirmation.
+  useEffect(() => {
+    const orderId = readPendingPayment();
+    if (!orderId) return;
+    let active = true;
+    (async () => {
+      const res = await getPaymentStatus(orderId);
+      if (!active) return;
+      if (res.data?.paymentStatus === "paid") {
+        clearPendingPayment();
+        router.push(`/checkout/success?order=${orderId}`);
+        return;
+      }
+      if (res.data?.resumable && res.data.razorpay) {
+        setRecovery({ orderId, razorpay: res.data.razorpay, reason: "resume" });
+      } else {
+        clearPendingPayment();
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [router]);
+
   const selected = quote ? (method === "cod" ? quote.cod : quote.prepaid) : null;
   const shippingCharge = selected?.available ? selected.charge : 0;
   const total = subtotal + shippingCharge;
@@ -167,16 +234,28 @@ export default function CheckoutClient({
     setModalOpen(true);
   }
 
-  async function startRazorpay(
-    orderId: string,
-    razorpay: { orderId: string; amount: number; keyId: string },
-    contact: { name: string; email: string; phone: string },
-  ) {
+  function currentContact() {
+    const a = selectedAddress;
+    return {
+      name: a?.full_name || defaultName,
+      email: contactEmail.trim() || defaultEmail,
+      phone: a?.phone || defaultPhone,
+    };
+  }
+
+  async function startRazorpay(orderId: string, razorpay: RazorpayParams) {
     const ready = await loadRazorpay();
     if (!ready || !window.Razorpay) {
-      setFormError("Couldn't load the payment window. Please try again.");
+      setFormError("Couldn't load the payment window. Please check your connection and try again.");
       return;
     }
+    // We're committed to this order now; remember it so a refresh can resume.
+    persistPendingPayment(orderId);
+    setFormError("");
+
+    const contact = currentContact();
+    let settled = false; // guards against ondismiss firing after success/failure
+
     const rzp = new window.Razorpay({
       key: razorpay.keyId,
       amount: razorpay.amount,
@@ -187,6 +266,7 @@ export default function CheckoutClient({
       prefill: { name: contact.name, email: contact.email, contact: contact.phone },
       theme: { color: "#111111" },
       handler: (response) => {
+        settled = true;
         startTransition(async () => {
           const verify = await verifyPayment({
             orderId,
@@ -195,18 +275,59 @@ export default function CheckoutClient({
             razorpay_signature: response.razorpay_signature,
           });
           if (verify.error) {
-            setFormError(verify.error);
+            // Signature/verify failed on the client path — the webhook and the
+            // success-page reconciliation are the backstop, so send them there
+            // to confirm rather than declaring failure prematurely.
+            router.push(`/checkout/success?order=${orderId}`);
             return;
           }
+          clearPendingPayment();
           router.push(`/checkout/success?order=${orderId}`);
           router.refresh();
         });
       },
       modal: {
-        ondismiss: () => setFormError("Payment was cancelled. Your order is saved — you can pay again."),
+        ondismiss: () => {
+          if (settled) return;
+          setRecovery({ orderId, razorpay, reason: "cancelled" });
+        },
       },
     });
+
+    // A genuine gateway/bank failure (card declined, etc.). The buyer can retry
+    // on the same order without us creating a duplicate.
+    rzp.on("payment.failed", (resp) => {
+      settled = true;
+      setRecovery({
+        orderId,
+        razorpay,
+        reason: "failed",
+        detail: resp.error?.description,
+      });
+    });
+
     rzp.open();
+  }
+
+  // Re-open Razorpay for an order we already created (retry or post-refresh
+  // resume) — never creates a new order.
+  function resumePayment() {
+    if (!recovery) return;
+    const { orderId, razorpay } = recovery;
+    setRecovery(null);
+    void startRazorpay(orderId, razorpay);
+  }
+
+  function dismissRecovery() {
+    const orderId = recovery?.orderId;
+    clearPendingPayment();
+    setRecovery(null);
+    if (!orderId) return;
+    // Delete the abandoned order so it never lingers as a failed order. The
+    // server reconciles first; if it was actually paid, send them to confirmation.
+    void abandonPayment(orderId).then((res) => {
+      if (res.data?.paid) router.push(`/checkout/success?order=${orderId}`);
+    });
   }
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -258,11 +379,7 @@ export default function CheckoutClient({
       }
 
       if (result.data.razorpay) {
-        await startRazorpay(result.data.orderId, result.data.razorpay, {
-          name: address.full_name || defaultName,
-          email: contactEmail.trim() || defaultEmail,
-          phone: address.phone || defaultPhone,
-        });
+        await startRazorpay(result.data.orderId, result.data.razorpay);
       }
     });
   }
@@ -565,6 +682,73 @@ export default function CheckoutClient({
           onClose={() => setModalOpen(false)}
           onSaved={() => router.refresh()}
         />
+      )}
+
+      {/* Payment recovery — failed / cancelled / resumable payment. Retrying
+          reuses the same order, so no duplicate order is ever created. */}
+      {recovery && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-5"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div className="relative w-full max-w-sm bg-white border border-[#E8E4DE] p-7 text-center">
+            <button
+              type="button"
+              onClick={dismissRecovery}
+              aria-label="Close"
+              className="absolute top-4 right-4 text-[#B0ADA8] hover:text-[#111] transition-colors"
+            >
+              <X size={18} />
+            </button>
+
+            <div
+              className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-5 ${
+                recovery.reason === "resume" ? "bg-[#F5F1EB]" : "bg-[#FBEAEA]"
+              }`}
+            >
+              {recovery.reason === "resume" ? (
+                <RefreshCw size={22} className="text-[#C9A86C]" />
+              ) : (
+                <AlertCircle size={22} className="text-[#B23A3A]" />
+              )}
+            </div>
+
+            <h3 className="text-2xl font-[family-name:var(--font-cormorant)] font-medium italic text-[#111] mb-3">
+              {recovery.reason === "resume"
+                ? "Finish Your Payment"
+                : recovery.reason === "cancelled"
+                  ? "Payment Cancelled"
+                  : "Payment Failed"}
+            </h3>
+            <p className="text-[13px] text-[#4A4A4A] leading-relaxed mb-6">
+              {recovery.reason === "resume"
+                ? "You have a payment that wasn't completed. You can pick up right where you left off — your order is saved."
+                : recovery.reason === "cancelled"
+                  ? "You closed the payment window before it was completed. You haven't been charged — you can try again whenever you're ready."
+                  : `${recovery.detail ? `${recovery.detail} ` : "Your payment couldn't be completed. "}You haven't been charged. Please try again or use a different payment method.`}
+            </p>
+
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={resumePayment}
+                disabled={isPending}
+                className="w-full bg-[#111] text-white text-[11px] tracking-[0.2em] uppercase py-3.5 hover:bg-[#333] transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                <RefreshCw size={13} />
+                {recovery.reason === "resume" ? "Resume Payment" : "Try Again"}
+              </button>
+              <button
+                type="button"
+                onClick={dismissRecovery}
+                className="w-full border border-[#E8E4DE] text-[#111] text-[11px] tracking-[0.2em] uppercase py-3.5 hover:border-[#111] transition-colors"
+              >
+                {recovery.reason === "resume" ? "Start Over" : "Choose Another Method"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

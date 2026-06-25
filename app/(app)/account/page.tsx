@@ -53,7 +53,14 @@ export default async function AccountPage({
   type RawOrder = { id: string; status: string; total_amount: number; created_at: string; payment_method: PaymentMethod | null; payment_status: PaymentStatus; order_items: ItemRow[] | null };
   const rawOrders = (orderRows ?? []) as unknown as RawOrder[];
 
-  const orders: OrderView[] = rawOrders.map((o) => {
+  // An online (Razorpay) order only becomes a real order once payment is
+  // captured. Hide unpaid/failed online orders — abandoned or failed payments
+  // must never surface as confirmed orders. COD orders are confirmed on placement.
+  const confirmedOrders = rawOrders.filter(
+    (o) => !(o.payment_method === "razorpay" && (o.payment_status === "pending" || o.payment_status === "failed")),
+  );
+
+  const orders: OrderView[] = confirmedOrders.map((o) => {
     const itemsRaw = o.order_items ?? [];
     const items = itemsRaw.map((it) => {
       if (it.product_id) {

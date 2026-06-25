@@ -84,7 +84,13 @@ export default async function AdminPage() {
   const collectionName = (id: string) => catalogCollections.find((x) => x.id === id)?.name ?? "Collection";
 
   const rawOrders = (ordersResult.data ?? []) as unknown as RawOrder[];
-  const orders: AdminOrder[] = rawOrders.map((o) => ({
+  // An online (Razorpay) order is a draft until payment is captured. Unpaid or
+  // failed online orders are abandoned/failed payments — never real orders — so
+  // they're excluded from the admin entirely. (COD is confirmed on placement.)
+  const visibleOrders = rawOrders.filter(
+    (o) => !(o.payment_method === "razorpay" && (o.payment_status === "pending" || o.payment_status === "failed")),
+  );
+  const orders: AdminOrder[] = visibleOrders.map((o) => ({
     id: o.id,
     status: o.status,
     paymentMethod: o.payment_method,

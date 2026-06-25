@@ -2,8 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Check, Clock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { reconcileRazorpayPayment } from "@/lib/server/payments";
 import { formatPrice } from "@/lib/product-utils";
 import { DELIVERY_ESTIMATE } from "@/lib/shipping";
+import PaymentVerifying from "./PaymentVerifying";
 
 export const metadata = { title: "Order Confirmed — Viale" };
 
@@ -27,6 +29,19 @@ export default async function CheckoutSuccessPage({
     .maybeSingle();
 
   if (!order) redirect("/");
+
+  // An online order is only "confirmed" once payment is captured. Reconcile
+  // against Razorpay first (covers a buyer who refreshed/closed the tab right
+  // after paying), then hand any still-unpaid order to the client watcher
+  // instead of falsely showing a confirmation.
+  if (order.payment_method === "razorpay" && order.payment_status !== "paid") {
+    const reconciled = await reconcileRazorpayPayment(supabase, order.id);
+    if (reconciled?.paymentStatus !== "paid") {
+      return <PaymentVerifying orderId={order.id} />;
+    }
+    order.payment_status = "paid";
+    order.status = "processing";
+  }
 
   const shippingAddress = order.shipping_address as { full_name?: string } | null;
   const recipientName = shippingAddress?.full_name ?? "";

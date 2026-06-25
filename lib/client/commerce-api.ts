@@ -89,3 +89,27 @@ export async function verifyPayment(input: VerifyPaymentInput) {
     body: JSON.stringify(input),
   });
 }
+
+export type PaymentStatusResult = {
+  orderId: string;
+  paymentStatus: "pending" | "paid" | "failed" | "refunded";
+  paymentMethod: "razorpay" | "cod" | null;
+  resumable: boolean;
+  razorpay?: { orderId: string; amount: number; keyId: string };
+};
+
+/** Reconcile + read an order's payment state (powers resume/retry/polling). */
+export async function getPaymentStatus(orderId: string) {
+  return requestJson<PaymentStatusResult>("/api/payment/status", {
+    method: "POST",
+    body: JSON.stringify({ orderId }),
+  });
+}
+
+/** Delete an unpaid order the buyer abandoned (no-op if it was actually paid). */
+export async function abandonPayment(orderId: string) {
+  return requestJson<{ deleted: boolean; paid: boolean }>("/api/payment/abandon", {
+    method: "POST",
+    body: JSON.stringify({ orderId }),
+  });
+}

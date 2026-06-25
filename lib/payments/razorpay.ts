@@ -47,6 +47,45 @@ export async function createRazorpayOrder(
   return data;
 }
 
+export type RazorpayPaymentStatus =
+  | "created"
+  | "authorized"
+  | "captured"
+  | "refunded"
+  | "failed";
+
+export type RazorpayPayment = {
+  id: string;
+  status: RazorpayPaymentStatus;
+  order_id: string;
+  amount: number;
+};
+
+/**
+ * Fetch every payment attempt Razorpay has recorded against an order. This is
+ * the source of truth used to reconcile an order whose client-side handler may
+ * never have run (tab closed, refresh, lost network) — we ask the gateway
+ * directly instead of trusting the browser or waiting on a webhook.
+ */
+export async function fetchOrderPayments(razorpayOrderId: string): Promise<RazorpayPayment[]> {
+  const res = await fetch(`${BASE}/orders/${razorpayOrderId}/payments`, {
+    method: "GET",
+    headers: { Authorization: authHeader() },
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: { description?: string } };
+    throw new Error(`Razorpay payment lookup failed: ${data.error?.description ?? res.statusText}`);
+  }
+  const data = (await res.json().catch(() => ({}))) as { items?: RazorpayPayment[] };
+  return data.items ?? [];
+}
+
+/** The successfully captured payment for an order, if one exists. */
+export function findCapturedPayment(payments: RazorpayPayment[]): RazorpayPayment | undefined {
+  return payments.find((p) => p.status === "captured");
+}
+
 function safeEqualHex(a: string, b: string): boolean {
   if (!a || !b) return false;
   const bufA = Buffer.from(a, "utf8");

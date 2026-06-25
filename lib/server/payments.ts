@@ -2,9 +2,19 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { recordOrderEvent } from "@/lib/server/order-events";
-import type { Database } from "@/types/database";
+import { fetchOrderPayments, findCapturedPayment } from "@/lib/payments/razorpay";
+import type { Database, PaymentMethod, PaymentStatus } from "@/types/database";
 
 type Client = SupabaseClient<Database>;
+
+export type ReconcileResult = {
+  /** The order's payment state after reconciliation. */
+  paymentStatus: PaymentStatus;
+  paymentMethod: PaymentMethod | null;
+  /** Whether this order can still be paid (unpaid Razorpay order with a gateway order id). */
+  resumable: boolean;
+  razorpayOrderId: string | null;
+};
 
 /**
  * Mark a Razorpay order as paid and ready to fulfill. Idempotent: safe to call
@@ -63,6 +73,106 @@ export async function markPaymentFailed(supabase: Client, orderId: string): Prom
     description: "We couldn't confirm your online payment. You can retry from your order.",
     is_customer_visible: false,
   });
+}
+
+/**
+ * Determine an order's true payment state, asking Razorpay directly when the
+ * order is still unpaid. This is what makes the flow resilient to refreshes and
+ * closed tabs: even if the client-side handler never ran and the webhook is
+ * delayed or missing, a captured payment is detected here and finalized.
+ *
+ * Only ever upgrades an order to "paid" — it never marks an order failed, since
+ * a transient failed attempt may be followed by a successful retry on the same
+ * Razorpay order. Failures are recorded by the webhook (`payment.failed`).
+ */
+export async function reconcileRazorpayPayment(
+  supabase: Client,
+  orderId: string,
+): Promise<ReconcileResult | null> {
+  const { data: order } = await supabase
+    .from("orders")
+    .select("id, status, payment_method, payment_status, razorpay_order_id")
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!order) return null;
+
+  const isRazorpay = order.payment_method === "razorpay";
+  const settled = order.payment_status === "paid" || order.payment_status === "refunded";
+
+  // Unpaid Razorpay order with a gateway order — ask Razorpay whether it was
+  // actually paid (the client may have died before confirming).
+  if (isRazorpay && !settled && order.razorpay_order_id) {
+    try {
+      const payments = await fetchOrderPayments(order.razorpay_order_id);
+      const captured = findCapturedPayment(payments);
+      if (captured) {
+        const result = await finalizeRazorpayPayment(supabase, {
+          orderId: order.id,
+          paymentId: captured.id,
+        });
+        if (result.ok) {
+          return {
+            paymentStatus: "paid",
+            paymentMethod: order.payment_method,
+            resumable: false,
+            razorpayOrderId: order.razorpay_order_id,
+          };
+        }
+      }
+    } catch (err) {
+      // Network/gateway hiccup — fall through and report the stored state. The
+      // webhook remains the backstop; the caller can retry.
+      console.error("reconcileRazorpayPayment lookup failed:", err);
+    }
+  }
+
+  const resumable =
+    isRazorpay &&
+    !settled &&
+    order.status !== "cancelled" &&
+    Boolean(order.razorpay_order_id);
+
+  return {
+    paymentStatus: order.payment_status,
+    paymentMethod: order.payment_method,
+    resumable,
+    razorpayOrderId: order.razorpay_order_id,
+  };
+}
+
+/**
+ * Permanently delete an unpaid online order the buyer has walked away from, so
+ * abandoned/failed payments leave no trace (they never become real orders).
+ *
+ * Reconciles against Razorpay FIRST and refuses to delete anything that turned
+ * out to be paid — essential with live keys, where a deleted-but-paid order
+ * would mean money taken with no record. Returns the outcome so the caller can
+ * route a surprise-paid order to confirmation instead.
+ */
+export async function abandonRazorpayOrder(
+  supabase: Client,
+  orderId: string,
+): Promise<{ deleted: boolean; paid: boolean }> {
+  const reconciled = await reconcileRazorpayPayment(supabase, orderId);
+  if (!reconciled) return { deleted: false, paid: false };
+
+  // Only ever delete an unpaid online order. Never touch COD, paid, or refunded.
+  if (
+    reconciled.paymentMethod !== "razorpay" ||
+    reconciled.paymentStatus === "paid" ||
+    reconciled.paymentStatus === "refunded"
+  ) {
+    return { deleted: false, paid: reconciled.paymentStatus === "paid" };
+  }
+
+  // order_events cascade on order delete; remove items explicitly first.
+  await supabase.from("order_items").delete().eq("order_id", orderId);
+  const { error } = await supabase.from("orders").delete().eq("id", orderId);
+  if (error) {
+    console.error("abandonRazorpayOrder delete failed:", error.message);
+    return { deleted: false, paid: false };
+  }
+  return { deleted: true, paid: false };
 }
 
 export async function markPaymentRefunded(supabase: Client, orderId: string): Promise<void> {
