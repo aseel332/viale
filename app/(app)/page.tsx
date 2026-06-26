@@ -128,7 +128,7 @@ export default async function Home() {
             style={{ animationDelay: "0.65s" }}
           >
             <div className="text-center">
-              <p className="text-xl font-[family-name:var(--font-cormorant)] font-medium text-[#111]">200+</p>
+              <p className="text-xl font-[family-name:var(--font-cormorant)] font-medium text-[#111]">60+</p>
               <p className="text-[9px] tracking-[0.2em] uppercase text-[#6B6B6B]">Brands</p>
             </div>
             <div className="w-px h-8 bg-[#E8E4DE]" />
@@ -166,7 +166,7 @@ export default async function Home() {
               className="text-[#6B6B6B] text-base leading-relaxed max-w-sm mb-10 animate-fade-in"
               style={{ animationDelay: "0.3s" }}
             >
-              Try 200+ niche and designer fragrances without the full-bottle commitment.
+              Try 60+ niche and designer fragrances without the full-bottle commitment.
               Starting from <span className="text-[#111] font-medium">{fromPrice}</span>.
             </p>
             <div className="flex gap-3 animate-fade-in" style={{ animationDelay: "0.45s" }}>
@@ -185,7 +185,7 @@ export default async function Home() {
             </div>
             <div className="flex items-center gap-6 mt-12 animate-fade-in" style={{ animationDelay: "0.6s" }}>
               <div className="text-center">
-                <p className="text-xl font-[family-name:var(--font-cormorant)] font-medium text-[#111]">200+</p>
+                <p className="text-xl font-[family-name:var(--font-cormorant)] font-medium text-[#111]">60+</p>
                 <p className="text-[9px] tracking-[0.2em] uppercase text-[#6B6B6B]">Brands</p>
               </div>
               <div className="w-px h-8 bg-[#E8E4DE]" />

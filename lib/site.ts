@@ -5,11 +5,11 @@
 export const BUSINESS = {
   legalName: "Viale Fragrances",
   brand: "Viale",
-  email: "support@viale.example",
-  phone: "+91 00000 00000",
-  address: "Replace with your registered business address, City, State, PIN",
+  email: "vialesupport@gmail.com",
+  phone: "+91 7228027706",
+  address: "Paldi, Ahmedabad, 380007, Gujarat, India",
   // Window within which order/return queries are handled.
-  supportHours: "Mon–Sat, 10:00–18:00 IST",
+  supportHours: "Mon–Sat, 12:00–18:00 IST",
 } as const;
 
 export const POLICY_LINKS: { label: string; href: string }[] = [
