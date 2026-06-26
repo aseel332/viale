@@ -371,6 +371,20 @@ export async function generatePerfumeImportAdmin(
       persist: false,
       saveImage: generatedPerfumeImageUploader(supabase),
     });
+
+    // When the admin opts out of AI image generation, let them upload a custom
+    // bottle image instead of falling back to the default placeholder.
+    if (!generateImage) {
+      const upload = fileField(formData, "image");
+      if (upload) {
+        draft.imageSrc = await uploadImageFile(
+          supabase,
+          upload,
+          uploadFileObjectPath("generated/perfumes", draft.id, upload),
+        );
+      }
+    }
+
     await persistPerfumeDraft(supabase, user.id, `${brand} ${name}`.trim(), draft);
     revalidatePath("/admin");
 

@@ -283,6 +283,7 @@ function AgentPanel({
 }) {
   const [discoverState, discoverAction] = useActionState(discoverPerfumesAdmin, initialActionState);
   const [generateState, generateAction] = useActionState(generatePerfumeImportAdmin, initialActionState);
+  const [generateDraftImage, setGenerateDraftImage] = useState(false);
 
   const queueImports = imports.filter((row) => !CLOSED_IMPORT_STATUSES.has(row.status));
   const latestJob = jobs[0];
@@ -348,9 +349,29 @@ function AgentPanel({
               <input name="name" required placeholder="Sauvage Elixir" className={inputClass()} />
             </div>
             <label className="flex items-center gap-2 text-sm text-[#111] sm:col-span-2">
-              <input name="generate_image" type="checkbox" className="h-4 w-4 accent-[#111]" />
+              <input
+                name="generate_image"
+                type="checkbox"
+                checked={generateDraftImage}
+                onChange={(event) => setGenerateDraftImage(event.target.checked)}
+                className="h-4 w-4 accent-[#111]"
+              />
               Generate bottle image
             </label>
+            {!generateDraftImage && (
+              <div className="sm:col-span-2">
+                <Label>Custom image (optional)</Label>
+                <input
+                  name="image"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/avif"
+                  className={`${inputClass()} file:mr-3 file:rounded file:border-0 file:bg-[#111] file:px-3 file:py-1 file:text-xs file:font-semibold file:text-white`}
+                />
+                <p className="mt-1 text-[10px] text-[#6B6B6B]">
+                  Upload your own bottle image. Leave empty to use the default placeholder.
+                </p>
+              </div>
+            )}
             <div className="sm:col-span-2">
               <SubmitButton icon={Sparkles}>Generate Draft</SubmitButton>
             </div>
