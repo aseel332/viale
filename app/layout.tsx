@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Inter, Cormorant_Garamond } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
@@ -22,9 +22,75 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Resolve the canonical site URL. Works automatically on Vercel; override with
+// NEXT_PUBLIC_SITE_URL once a custom domain is connected.
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : "http://localhost:3000");
+
+const title = "Vialé — Luxury Fragrance Decants | Niche & Designer Samples";
+const description =
+  "Explore 200+ niche & designer fragrances as authentic, hand-poured decants from ₹1,160. Find your signature scent before committing to a full bottle — shipped fast across India.";
+
 export const metadata: Metadata = {
-  title: "Viale — Luxury Scents, One Drop at a Time",
-  description: "Try 200+ niche and designer fragrances without the full-bottle commitment. Premium decants starting from ₹1,160.",
+  metadataBase: new URL(siteUrl),
+  // Plain default title — individual pages already self-brand (e.g. "Cart —
+  // Viale"), so a "%s · Vialé" template would double-brand them.
+  title,
+  description,
+  applicationName: "Vialé",
+  category: "shopping",
+  keywords: [
+    "fragrance decants",
+    "perfume samples",
+    "niche fragrances",
+    "designer perfumes",
+    "perfume decants India",
+    "luxury fragrances",
+    "buy perfume samples online",
+    "Vialé",
+  ],
+  authors: [{ name: "Vialé" }],
+  creator: "Vialé",
+  publisher: "Vialé",
+  alternates: { canonical: "/" },
+  // Icons (favicon.ico, icon.png, apple-icon.png) and social images
+  // (opengraph-image.png, twitter-image.png) are auto-wired from the app/
+  // directory via Next.js file conventions, so they are not listed here.
+  openGraph: {
+    type: "website",
+    siteName: "Vialé",
+    title: "Vialé — Luxury Fragrance Decants",
+    description:
+      "Try 200+ niche & designer fragrances without the full-bottle commitment. Authentic, hand-poured decants from ₹1,160 — shipped fast across India.",
+    url: "/",
+    locale: "en_IN",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Vialé — Luxury Fragrance Decants",
+    description:
+      "Try 200+ niche & designer fragrances without the full-bottle commitment. Authentic, hand-poured decants from ₹1,160.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#FAF7F1" },
+    { media: "(prefers-color-scheme: dark)", color: "#1C1917" },
+  ],
 };
 
 export default function RootLayout({
