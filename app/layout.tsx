@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Inter, Cormorant_Garamond } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { SITE_URL } from "@/lib/site-url";
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 
@@ -22,20 +23,12 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// Resolve the canonical site URL. Works automatically on Vercel; override with
-// NEXT_PUBLIC_SITE_URL once a custom domain is connected.
-const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL ||
-  (process.env.VERCEL_PROJECT_PRODUCTION_URL
-    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-    : "http://localhost:3000");
-
 const title = "Vialé — Luxury Fragrance Decants | Niche & Designer Samples";
 const description =
   "Explore 200+ niche & designer fragrances as authentic, hand-poured decants from ₹1,160. Find your signature scent before committing to a full bottle — shipped fast across India.";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
+  metadataBase: new URL(SITE_URL),
   // Plain default title — individual pages already self-brand (e.g. "Cart —
   // Viale"), so a "%s · Vialé" template would double-brand them.
   title,
