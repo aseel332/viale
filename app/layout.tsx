@@ -42,6 +42,7 @@ export const metadata: Metadata = {
     "designer perfumes",
     "perfume decants India",
     "luxury fragrances",
+    "luxury decants",
     "buy perfume samples online",
     "Vialé",
   ],
@@ -57,7 +58,7 @@ export const metadata: Metadata = {
     siteName: "Vialé",
     title: "Vialé — Luxury Fragrance Decants",
     description:
-      "Try 200+ niche & designer fragrances without the full-bottle commitment. Authentic, hand-poured decants from ₹1,160 — shipped fast across India.",
+      "Try 60+ niche & designer fragrances without the full-bottle commitment. Authentic, hand-poured decants from ₹500 — shipped fast across India.",
     url: "/",
     locale: "en_IN",
   },
@@ -65,7 +66,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Vialé — Luxury Fragrance Decants",
     description:
-      "Try 200+ niche & designer fragrances without the full-bottle commitment. Authentic, hand-poured decants from ₹1,160.",
+      "Try 60+ niche & designer fragrances without the full-bottle commitment. Authentic, hand-poured decants from ₹500.",
   },
   robots: {
     index: true,
