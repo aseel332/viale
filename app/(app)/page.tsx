@@ -39,7 +39,7 @@ function buildWhyItems(fromPrice: string) {
   return [
   { icon: "✦", title: "100% Authentic",           body: "Every decant is sourced directly from sealed full-size bottles. Never a fake."              },
   { icon: "◈", title: "Try Before You Commit",     body: `Sample any luxury scent from ${fromPrice}. No blind-buying, no regret.`                  },
-  { icon: "◉", title: "200+ Luxury Brands",        body: "Dior, Creed, Tom Ford, MFK and hundreds more — all in one place."                         },
+  { icon: "◉", title: "60+ Luxury Brands",        body: "Dior, Creed, Tom Ford, MFK and hundreds more — all in one place."                         },
   { icon: "◇", title: "Delivery in 4–10 Days",     body: "Discreet, secure packaging shipped with India's most reliable couriers."                  },
   ];
 }
