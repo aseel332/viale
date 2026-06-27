@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Heart, ShoppingBag, ChevronDown, ChevronUp, Check, ArrowLeft } from "lucide-react";
 import {
   BOTTLE_SIZES,
+  isSizeAvailable,
   resolveSizePrice,
   formatPrice,
   type BottleSize,
@@ -64,7 +65,9 @@ function StarPicker({ value, onChange }: { value: number; onChange: (v: number) 
 // ── Main Component ────────────────────────────────────────────────────────────
 export default function ProductDetailClient({ product, reviews, isSignedIn, userReview, initialWishlisted = false }: Props) {
   const router = useRouter();
-  const [selectedSize, setSelectedSize] = useState<BottleSize>(5);
+  // Default to the first size that's actually on sale (30ml is off by default).
+  const firstAvailableSize = BOTTLE_SIZES.find((size) => isSizeAvailable(product, size)) ?? 5;
+  const [selectedSize, setSelectedSize] = useState<BottleSize>(firstAvailableSize);
   const [addedToCart, setAddedToCart] = useState(false);
   const [isWishlisted, setIsWishlisted] = useState(initialWishlisted);
   const [descOpen, setDescOpen] = useState(false);
@@ -79,8 +82,10 @@ export default function ProductDetailClient({ product, reviews, isSignedIn, user
   const hasDiscount = selectedPricing.hasDiscount;
   const displayPrice = selectedPricing.price;
   const originalDisplayPrice = selectedPricing.original;
+  const selectedSizeAvailable = isSizeAvailable(product, selectedSize);
 
   function handleAddToCart() {
+    if (!selectedSizeAvailable) return;
     if (!isSignedIn) {
       window.location.href = "/account?redirectTo=/products/" + product.id;
       return;
@@ -98,6 +103,7 @@ export default function ProductDetailClient({ product, reviews, isSignedIn, user
   }
 
   function handleBuyNow() {
+    if (!selectedSizeAvailable) return;
     // Buy Now is a direct purchase of *this* product+size — it must not pull the
     // rest of the cart into checkout, so route straight to a single-item checkout
     // without adding anything to the persistent cart.
@@ -280,24 +286,36 @@ export default function ProductDetailClient({ product, reviews, isSignedIn, user
                 const sizePricing = resolveSizePrice(product, size);
                 const sizePrice = sizePricing.price;
                 const originalSizePrice = sizePricing.original;
-                const isSelected = selectedSize === size;
+                const available = isSizeAvailable(product, size);
+                const isSelected = selectedSize === size && available;
                 return (
                   <button
                     key={size}
-                    onClick={() => setSelectedSize(size)}
+                    onClick={() => available && setSelectedSize(size)}
+                    disabled={!available}
+                    aria-disabled={!available}
+                    title={available ? undefined : `${size}ml is currently unavailable`}
                     className={`flex-1 flex flex-col items-center py-4 border-2 transition-all duration-200 ${
-                      isSelected
-                        ? "border-[#111] bg-[#111] text-white"
-                        : "border-[#E8E4DE] text-[#111] hover:border-[#111]"
+                      !available
+                        ? "border-[#E8E4DE] text-[#B0ADA8] bg-[#F5F3EF] cursor-not-allowed"
+                        : isSelected
+                          ? "border-[#111] bg-[#111] text-white"
+                          : "border-[#E8E4DE] text-[#111] hover:border-[#111]"
                     }`}
                   >
-                    <span className="text-[15px] font-semibold">{size}ml</span>
-                    <span className={`text-[11px] mt-1 ${isSelected ? "text-white/70" : "text-[#6B6B6B]"}`}>
-                      {formatPrice(sizePrice)}
-                      {sizePricing.hasDiscount && (
-                        <span className="ml-1 line-through opacity-70">
-                          {formatPrice(originalSizePrice)}
-                        </span>
+                    <span className={`text-[15px] font-semibold ${!available ? "line-through" : ""}`}>{size}ml</span>
+                    <span className={`text-[11px] mt-1 ${!available ? "text-[#B0ADA8]" : isSelected ? "text-white/70" : "text-[#6B6B6B]"}`}>
+                      {available ? (
+                        <>
+                          {formatPrice(sizePrice)}
+                          {sizePricing.hasDiscount && (
+                            <span className="ml-1 line-through opacity-70">
+                              {formatPrice(originalSizePrice)}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        "Unavailable"
                       )}
                     </span>
                   </button>
@@ -327,14 +345,16 @@ export default function ProductDetailClient({ product, reviews, isSignedIn, user
           <div className="flex flex-col sm:flex-row gap-3">
             <button
               onClick={handleAddToCart}
-              disabled={isPending}
+              disabled={isPending || !selectedSizeAvailable}
               className={`flex-1 flex items-center justify-center gap-2 py-4 text-[11px] tracking-[0.2em] uppercase font-medium transition-all duration-300 ${
                 addedToCart
                   ? "bg-[#3A7A3A] text-white border-2 border-[#3A7A3A]"
                   : "bg-[#111] text-white hover:bg-[#333] border-2 border-[#111]"
-              } disabled:opacity-60`}
+              } disabled:opacity-60 disabled:cursor-not-allowed`}
             >
-              {addedToCart ? (
+              {!selectedSizeAvailable ? (
+                "Currently Unavailable"
+              ) : addedToCart ? (
                 <>
                   <Check size={14} />
                   Added to Bag
@@ -348,8 +368,8 @@ export default function ProductDetailClient({ product, reviews, isSignedIn, user
             </button>
             <button
               onClick={handleBuyNow}
-              disabled={isPending}
-              className="flex-1 flex items-center justify-center gap-2 py-4 text-[11px] tracking-[0.2em] uppercase font-medium border-2 border-[#111] text-[#111] hover:bg-[#111] hover:text-white transition-all duration-300 disabled:opacity-60"
+              disabled={isPending || !selectedSizeAvailable}
+              className="flex-1 flex items-center justify-center gap-2 py-4 text-[11px] tracking-[0.2em] uppercase font-medium border-2 border-[#111] text-[#111] hover:bg-[#111] hover:text-white transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-[#111]"
             >
               Buy Now
             </button>

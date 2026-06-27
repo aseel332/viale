@@ -32,6 +32,36 @@ export function priceForSize(basePrice: number, size: BottleSize): number {
 export type SizePriceEntry = { price?: number | null; discount?: number | null };
 export type SizePricing = Partial<Record<BottleSize, SizePriceEntry>>;
 
+// Optional admin-set availability override per bottle size.
+export type SizeAvailability = Partial<Record<BottleSize, boolean>>;
+
+// Sizes that are switched OFF storewide by default. A product only sells these
+// once an admin explicitly enables them (via products.size_availability). This
+// is what keeps every 30ml decant "currently unavailable" until toggled on.
+export const DEFAULT_UNAVAILABLE_SIZES: readonly BottleSize[] = [30];
+
+/** Resolve whether a size is on sale from a raw availability map (admin-side). */
+export function sizeAvailableFromMap(
+  map: SizeAvailability | null | undefined,
+  size: BottleSize,
+): boolean {
+  const override = map?.[size];
+  if (typeof override === "boolean") return override;
+  return !DEFAULT_UNAVAILABLE_SIZES.includes(size);
+}
+
+/**
+ * Whether a given bottle size can currently be purchased for this product.
+ * Prefers an explicit per-size override (set in the admin dashboard) and falls
+ * back to the storewide default (30ml off until enabled).
+ */
+export function isSizeAvailable(
+  product: Pick<Product, "sizeAvailability">,
+  size: BottleSize,
+): boolean {
+  return sizeAvailableFromMap(product.sizeAvailability, size);
+}
+
 /**
  * Resolve the price for a given bottle size.
  * Prefers an explicit per-size override (set in the admin dashboard) and falls
@@ -68,6 +98,7 @@ export interface Product {
   price: number;
   discountPrice?: number | null;
   sizePricing?: SizePricing | null;
+  sizeAvailability?: SizeAvailability | null;
   rating: number;
   imageSrc: string;
   tag?: string;

@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { X, ShoppingBag, Check, Loader2 } from "lucide-react";
 import {
   BOTTLE_SIZES,
+  isSizeAvailable,
   resolveSizePrice,
   formatPrice,
   type BottleSize,
@@ -22,7 +23,9 @@ interface Props {
 
 export default function QuickViewModal({ product, open, onClose }: Props) {
   const router = useRouter();
-  const [size, setSize] = useState<BottleSize>(5);
+  // Start on the first size that's actually on sale (30ml is off by default).
+  const firstAvailableSize = BOTTLE_SIZES.find((s) => isSizeAvailable(product, s)) ?? 5;
+  const [size, setSize] = useState<BottleSize>(firstAvailableSize);
   const [added, setAdded] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -42,8 +45,10 @@ export default function QuickViewModal({ product, open, onClose }: Props) {
   const hasDiscount = selectedPricing.hasDiscount;
   const price = selectedPricing.price;
   const originalPrice = selectedPricing.original;
+  const selectedSizeAvailable = isSizeAvailable(product, size);
 
   function handleAdd() {
+    if (!selectedSizeAvailable) return;
     startTransition(async () => {
       const res = await addCartItem({ itemType: "product", productId: product.id, sizeMl: size, quantity: 1 });
       if (res.status === 401) {
@@ -57,6 +62,7 @@ export default function QuickViewModal({ product, open, onClose }: Props) {
   }
 
   function handleBuyNow() {
+    if (!selectedSizeAvailable) return;
     // Direct purchase of just this product+size — never pulls the whole cart in.
     const target = `/checkout?buyNow=${encodeURIComponent(product.id)}&size=${size}`;
     router.push(target);
@@ -122,25 +128,39 @@ export default function QuickViewModal({ product, open, onClose }: Props) {
         <p className="text-[10px] tracking-[0.2em] uppercase text-[#111] mb-3 font-medium">Select Size</p>
         <div className="flex gap-2 mb-6">
           {BOTTLE_SIZES.map((s) => {
-            const selected = size === s;
+            const available = isSizeAvailable(product, s);
+            const selected = size === s && available;
             const sizePricing = resolveSizePrice(product, s);
             const sizePrice = sizePricing.price;
             const originalSizePrice = sizePricing.original;
             return (
               <button
                 key={s}
-                onClick={() => setSize(s)}
+                onClick={() => available && setSize(s)}
+                disabled={!available}
+                aria-disabled={!available}
+                title={available ? undefined : `${s}ml is currently unavailable`}
                 className={`flex-1 flex flex-col items-center py-3 border-2 transition-all ${
-                  selected ? "border-[#111] bg-[#111] text-white" : "border-[#E8E4DE] text-[#111] hover:border-[#111]"
+                  !available
+                    ? "border-[#E8E4DE] text-[#B0ADA8] bg-[#F5F3EF] cursor-not-allowed"
+                    : selected
+                      ? "border-[#111] bg-[#111] text-white"
+                      : "border-[#E8E4DE] text-[#111] hover:border-[#111]"
                 }`}
               >
-                <span className="text-[14px] font-semibold">{s}ml</span>
-                <span className={`text-[10px] mt-0.5 ${selected ? "text-white/70" : "text-[#6B6B6B]"}`}>
-                  {formatPrice(sizePrice)}
-                  {sizePricing.hasDiscount && (
-                    <span className="ml-1 line-through opacity-70">
-                      {formatPrice(originalSizePrice)}
-                    </span>
+                <span className={`text-[14px] font-semibold ${!available ? "line-through" : ""}`}>{s}ml</span>
+                <span className={`text-[10px] mt-0.5 ${!available ? "text-[#B0ADA8]" : selected ? "text-white/70" : "text-[#6B6B6B]"}`}>
+                  {available ? (
+                    <>
+                      {formatPrice(sizePrice)}
+                      {sizePricing.hasDiscount && (
+                        <span className="ml-1 line-through opacity-70">
+                          {formatPrice(originalSizePrice)}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    "Unavailable"
                   )}
                 </span>
               </button>
@@ -167,18 +187,24 @@ export default function QuickViewModal({ product, open, onClose }: Props) {
         <div className="space-y-2.5">
           <button
             onClick={handleAdd}
-            disabled={isPending}
-            className={`w-full flex items-center justify-center gap-2 py-3.5 text-[11px] tracking-[0.2em] uppercase font-medium transition-all disabled:opacity-60 ${
+            disabled={isPending || !selectedSizeAvailable}
+            className={`w-full flex items-center justify-center gap-2 py-3.5 text-[11px] tracking-[0.2em] uppercase font-medium transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
               added ? "bg-[#3A7A3A] text-white" : "bg-[#111] text-white hover:bg-[#333]"
             }`}
           >
-            {isPending ? <Loader2 size={14} className="animate-spin" /> : added ? <Check size={14} /> : <ShoppingBag size={14} />}
-            {added ? "Added to Bag" : "Add to Bag"}
+            {!selectedSizeAvailable ? (
+              "Currently Unavailable"
+            ) : (
+              <>
+                {isPending ? <Loader2 size={14} className="animate-spin" /> : added ? <Check size={14} /> : <ShoppingBag size={14} />}
+                {added ? "Added to Bag" : "Add to Bag"}
+              </>
+            )}
           </button>
           <button
             onClick={handleBuyNow}
-            disabled={isPending}
-            className="w-full py-3.5 text-[11px] tracking-[0.2em] uppercase font-medium border border-[#111] text-[#111] hover:bg-[#111] hover:text-white transition-colors disabled:opacity-60"
+            disabled={isPending || !selectedSizeAvailable}
+            className="w-full py-3.5 text-[11px] tracking-[0.2em] uppercase font-medium border border-[#111] text-[#111] hover:bg-[#111] hover:text-white transition-colors disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-[#111]"
           >
             Buy Now
           </button>

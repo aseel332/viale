@@ -38,7 +38,7 @@ import {
   updateProductAdmin,
   type AdminActionState,
 } from "@/app/actions/admin";
-import { BOTTLE_SIZES, formatPrice, priceForSize } from "@/lib/product-utils";
+import { BOTTLE_SIZES, DEFAULT_UNAVAILABLE_SIZES, formatPrice, priceForSize } from "@/lib/product-utils";
 import type {
   CollectionRow,
   PerfumeCandidateRow,
@@ -604,6 +604,30 @@ function ProductRowEditor({ product }: { product: ProductRow }) {
               <input name="is_active" type="checkbox" defaultChecked={product.is_active} className="h-4 w-4 accent-[#111]" />
               Available on storefront
             </label>
+            <div className="rounded-md border border-[#E8E4DE] bg-white p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#6B6B6B]">Available sizes</p>
+              <div className="mt-2 flex flex-wrap gap-4">
+                {BOTTLE_SIZES.map((size) => {
+                  const override = product.size_availability?.[String(size) as "5" | "10" | "30"];
+                  const defaultChecked =
+                    typeof override === "boolean" ? override : !DEFAULT_UNAVAILABLE_SIZES.includes(size);
+                  return (
+                    <label key={size} className="flex items-center gap-2 text-sm text-[#111]">
+                      <input
+                        name={`available_${size}`}
+                        type="checkbox"
+                        defaultChecked={defaultChecked}
+                        className="h-4 w-4 accent-[#111]"
+                      />
+                      {size}ml
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="mt-2 text-[11px] leading-relaxed text-[#6B6B6B]">
+                Untick a size to show it as &ldquo;currently unavailable&rdquo; on the storefront. 30ml is off by default until you enable it here.
+              </p>
+            </div>
             <div className="rounded-md border border-[#E8E4DE] bg-white p-3">
               <label className="flex items-center gap-2 text-sm font-medium text-[#111]">
                 <input name="is_top_pick" type="checkbox" defaultChecked={product.is_top_pick} className="h-4 w-4 accent-[#C9A86C]" />

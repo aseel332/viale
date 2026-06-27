@@ -33,6 +33,7 @@ import type {
   ProductInsert,
   Season,
   SeasonCategory,
+  SizeAvailabilityMap,
   SizePricingMap,
 } from "@/types/database";
 import { BOTTLE_SIZES } from "@/lib/product-utils";
@@ -131,6 +132,19 @@ function parseSizePricing(formData: FormData): {
   }
 
   return { basePrice, baseDiscount, sizePricing };
+}
+
+// Reads the per-size availability checkboxes (available_5, available_10,
+// available_30) from a product edit form into an explicit map. An unchecked box
+// is absent from the form data, so it resolves to `false` — exactly what marks a
+// size (e.g. 30ml) as unavailable.
+function parseSizeAvailability(formData: FormData): SizeAvailabilityMap {
+  const availability: SizeAvailabilityMap = {};
+  for (const size of BOTTLE_SIZES) {
+    const key = String(size) as "5" | "10" | "30";
+    availability[key] = parseBoolean(formData, `available_${size}`, false);
+  }
+  return availability;
 }
 
 function parseRating(raw: string) {
@@ -555,6 +569,7 @@ export async function updateProductAdmin(formData: FormData) {
       price: basePrice,
       discount_price: baseDiscount,
       size_pricing: Object.keys(sizePricing).length > 0 ? sizePricing : null,
+      size_availability: parseSizeAvailability(formData),
       tag: field(formData, "tag") || null,
       is_active: parseBoolean(formData, "is_active", false),
       is_top_pick: parseBoolean(formData, "is_top_pick", false),

@@ -3,7 +3,7 @@ import "server-only";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getProductById, getStorefrontCollectionById } from "@/lib/catalog";
-import { resolveSizePrice, type BottleSize } from "@/lib/product-utils";
+import { isSizeAvailable, resolveSizePrice, type BottleSize } from "@/lib/product-utils";
 import type { AddCartItemInput, BuyNowInput, CartLine, CartSummary } from "@/types/commerce";
 
 function validBottleSize(value: unknown): BottleSize {
@@ -33,6 +33,9 @@ export async function addProductToCart(
 
   const product = await getProductById(productId);
   if (!product) return { error: "Product is unavailable." };
+  if (!isSizeAvailable(product, sizeMl)) {
+    return { error: `The ${sizeMl}ml size is currently unavailable.` };
+  }
 
   const { error } = await supabase.from("cart_items").upsert(
     {
@@ -239,6 +242,8 @@ export async function buildBuyNowSummary(input: BuyNowInput): Promise<CartSummar
   if (!product) return empty;
 
   const size = validBottleSize(input.sizeMl);
+  // A direct "Buy Now" must respect the same availability rules as the cart.
+  if (!isSizeAvailable(product, size)) return empty;
   const quantity = normalizeQuantity(input.quantity);
   const unitPrice = resolveSizePrice(product, size).price;
 

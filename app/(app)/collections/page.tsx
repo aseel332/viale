@@ -161,9 +161,42 @@ function CategorySection({
   );
 }
 
+// ── Coming soon (shown until the first collection is published) ─
+function ComingSoon() {
+  return (
+    <section className="bg-[#FAFAF8] py-24 md:py-32">
+      <div className="max-w-screen-xl mx-auto px-5 md:px-10">
+        <AnimateIn>
+          <div className="mx-auto flex max-w-xl flex-col items-center text-center">
+            <p className="text-[10px] tracking-[0.3em] uppercase text-[#C9A86C] mb-5">In the workshop</p>
+            <h2 className="text-4xl md:text-6xl font-[family-name:var(--font-cormorant)] font-medium italic text-[#111]">
+              Coming Soon
+            </h2>
+            <p className="mt-5 text-sm leading-relaxed text-[#6B6B6B]">
+              Our curated boxes are being assembled with care. Hand-picked sets of four luxury
+              decants — built around a single season, mood and story — will land here very soon.
+            </p>
+            <div className="mt-8 h-px w-16 bg-[#E8E4DE]" />
+            <p className="mt-8 text-[11px] tracking-[0.15em] uppercase text-[#6B6B6B]">
+              In the meantime
+            </p>
+            <Link
+              href="/#all-decants"
+              className="mt-3 inline-block text-[11px] tracking-[0.2em] uppercase text-[#111] border-b border-[#111] pb-0.5 transition-colors hover:text-[#C9A86C] hover:border-[#C9A86C]"
+            >
+              Shop individual decants →
+            </Link>
+          </div>
+        </AnimateIn>
+      </div>
+    </section>
+  );
+}
+
 // ── Page ───────────────────────────────────────────────────────
 export default async function CollectionsPage() {
   const collections = await getStorefrontCollections();
+  const hasCollections = collections.length > 0;
 
   return (
     <>
@@ -189,38 +222,46 @@ export default async function CollectionsPage() {
             </div>
           </AnimateIn>
 
-          <AnimateIn delay={150} className="flex flex-wrap gap-5 mt-8 pt-8 border-t border-[#E8E4DE]">
-            {[
-              { label: "Summer Vibes",    href: "#summer",    color: "text-[#C9A86C]" },
-              { label: "Winter Warmth",   href: "#winter",    color: "text-[#7AAFD4]" },
-              { label: "Celebrity Picks", href: "#celebrity", color: "text-[#C9A86C]" },
-            ].map((nav) => (
-              <a key={nav.href} href={nav.href} className={`text-[11px] tracking-[0.15em] uppercase border-b border-transparent hover:border-current pb-px transition-colors ${nav.color}`}>
-                {nav.label}
-              </a>
-            ))}
-          </AnimateIn>
+          {hasCollections && (
+            <AnimateIn delay={150} className="flex flex-wrap gap-5 mt-8 pt-8 border-t border-[#E8E4DE]">
+              {[
+                { label: "Summer Vibes",    href: "#summer",    color: "text-[#C9A86C]" },
+                { label: "Winter Warmth",   href: "#winter",    color: "text-[#7AAFD4]" },
+                { label: "Celebrity Picks", href: "#celebrity", color: "text-[#C9A86C]" },
+              ].map((nav) => (
+                <a key={nav.href} href={nav.href} className={`text-[11px] tracking-[0.15em] uppercase border-b border-transparent hover:border-current pb-px transition-colors ${nav.color}`}>
+                  {nav.label}
+                </a>
+              ))}
+            </AnimateIn>
+          )}
         </div>
       </div>
 
-      <CategorySection
-        id="summer" theme="summer" eyebrow="Season Edit" num="01" numColor="text-[#F5D898]"
-        title="Summer Vibes" bgClass="bg-[#FFFBF3]"
-        blurb="Sun-warmed skin, golden hours, the freedom of open air. Carefully assembled sets for the days that stretch on forever."
-        collections={collections}
-      />
-      <CategorySection
-        id="winter" theme="winter" eyebrow="Dark Season Edit" num="02" numColor="text-[#1C2440]"
-        title="Winter Warmth" bgClass="bg-[#0B0F1A]"
-        blurb="When the air turns cold and the nights grow long, these are the scents that demand attention — rich, layered, unforgettable."
-        collections={collections}
-      />
-      <CategorySection
-        id="celebrity" theme="celebrity" eyebrow="Icons Wear These" num="03" numColor="text-[#111111]"
-        title="Celebrity Picks" bgClass="bg-[#080808]"
-        blurb="The niche and designer fragrances spotted on the world's most recognised names. Wear what the icons wear."
-        collections={collections}
-      />
+      {hasCollections ? (
+        <>
+          <CategorySection
+            id="summer" theme="summer" eyebrow="Season Edit" num="01" numColor="text-[#F5D898]"
+            title="Summer Vibes" bgClass="bg-[#FFFBF3]"
+            blurb="Sun-warmed skin, golden hours, the freedom of open air. Carefully assembled sets for the days that stretch on forever."
+            collections={collections}
+          />
+          <CategorySection
+            id="winter" theme="winter" eyebrow="Dark Season Edit" num="02" numColor="text-[#1C2440]"
+            title="Winter Warmth" bgClass="bg-[#0B0F1A]"
+            blurb="When the air turns cold and the nights grow long, these are the scents that demand attention — rich, layered, unforgettable."
+            collections={collections}
+          />
+          <CategorySection
+            id="celebrity" theme="celebrity" eyebrow="Icons Wear These" num="03" numColor="text-[#111111]"
+            title="Celebrity Picks" bgClass="bg-[#080808]"
+            blurb="The niche and designer fragrances spotted on the world's most recognised names. Wear what the icons wear."
+            collections={collections}
+          />
+        </>
+      ) : (
+        <ComingSoon />
+      )}
     </>
   );
 }

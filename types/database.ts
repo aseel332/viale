@@ -49,6 +49,11 @@ export type CartItemType = "product" | "collection";
 export type SizePriceEntry = { price?: number | null; discount?: number | null };
 export type SizePricingMap = Partial<Record<"5" | "10" | "30", SizePriceEntry>>;
 
+/** Optional per-size availability override stored on products.size_availability.
+ *  Keys are ml as strings ("5" | "10" | "30") → boolean; absent → storefront
+ *  default (5ml/10ml available, 30ml unavailable until enabled). */
+export type SizeAvailabilityMap = Partial<Record<"5" | "10" | "30", boolean>>;
+
 // ── Row shapes (what the DB returns) ─────────────────────────────────────────
 
 export type AdminUserRow = {
@@ -152,6 +157,7 @@ export type ProductRow = {
   price: number;
   discount_price: number | null;
   size_pricing: SizePricingMap | null;  // optional per-size overrides; null → multiplier model
+  size_availability: SizeAvailabilityMap | null;  // optional per-size availability; null → defaults (30ml off)
   rating: number;
   image_path: string;           // Supabase Storage path
   tag: string | null;           // "Bestseller" | "Top Pick" | "Iconic" | null
@@ -302,8 +308,8 @@ export type PerfumeImportInsert = Omit<PerfumeImportRow, "id" | "created_at" | "
 export type PerfumeDiscoveryJobInsert = Omit<PerfumeDiscoveryJobRow, "id" | "created_at" | "updated_at">;
 export type PerfumeCandidateInsert = Omit<PerfumeCandidateRow, "id" | "created_at" | "updated_at">;
 export type ProductInsert =
-  Omit<ProductRow, "created_at" | "updated_at" | "weight_g" | "is_top_pick" | "top_pick_order"> &
-  Partial<Pick<ProductRow, "weight_g" | "is_top_pick" | "top_pick_order">>;
+  Omit<ProductRow, "created_at" | "updated_at" | "weight_g" | "is_top_pick" | "top_pick_order" | "size_availability"> &
+  Partial<Pick<ProductRow, "weight_g" | "is_top_pick" | "top_pick_order" | "size_availability">>;
 export type CollectionInsert =
   Omit<CollectionRow, "created_at" | "updated_at" | "image_paths" | "manual_items"> &
   Partial<Pick<CollectionRow, "image_paths" | "manual_items">>;

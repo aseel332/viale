@@ -8,13 +8,14 @@ import {
   type Gender,
   type Product,
   type Season,
+  type SizeAvailability,
   type SizePricing,
   toINR,
 } from "@/lib/product-utils";
-import type { CollectionRow, ProductRow, SizePricingMap } from "@/types/database";
+import type { CollectionRow, ProductRow, SizeAvailabilityMap, SizePricingMap } from "@/types/database";
 
 const CATALOG_TTL_SECONDS = 300;
-const PRODUCTS_CACHE_KEY = "viale:catalog:products:v2";
+const PRODUCTS_CACHE_KEY = "viale:catalog:products:v3";
 const COLLECTIONS_CACHE_KEY = "viale:catalog:collections:v1";
 
 // A single tile shown for a collection (the 2×2 grid + "what's inside" list).
@@ -76,6 +77,18 @@ function sizePricingFromRow(value: SizePricingMap | null | undefined): SizePrici
   return Object.keys(out).length > 0 ? out : null;
 }
 
+// Coerce the admin-entered per-size availability map, dropping non-boolean
+// values. Null means "no overrides" so the storewide defaults apply (30ml off).
+function sizeAvailabilityFromRow(value: SizeAvailabilityMap | null | undefined): SizeAvailability | null {
+  if (!value || typeof value !== "object") return null;
+  const out: SizeAvailability = {};
+  for (const size of [5, 10, 30] as const) {
+    const entry = value[String(size) as "5" | "10" | "30"];
+    if (typeof entry === "boolean") out[size] = entry;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
 export function productFromRow(row: ProductRow): Product {
   const bottleSizes = (row.bottle_sizes ?? [5, 10, 30])
     .map(asBottleSize)
@@ -88,6 +101,7 @@ export function productFromRow(row: ProductRow): Product {
     price: normalizePrice(row.price) ?? 0,
     discountPrice: normalizePrice(row.discount_price),
     sizePricing: sizePricingFromRow(row.size_pricing),
+    sizeAvailability: sizeAvailabilityFromRow(row.size_availability),
     rating: Number(row.rating),
     imageSrc: row.image_path || "/collection_img.png",
     tag: row.tag ?? undefined,
