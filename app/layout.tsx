@@ -25,7 +25,7 @@ const geistMono = Geist_Mono({
 
 const title = "Vialé — Luxury Fragrance Decants | Niche & Designer Samples";
 const description =
-  "Explore 200+ niche & designer fragrances as authentic, hand-poured decants from ₹1,160. Find your signature scent before committing to a full bottle — shipped fast across India.";
+  "Explore 60+ niche & designer fragrances as authentic, hand-poured decants from ₹500. Find your signature scent before committing to a full bottle — shipped fast across India.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
