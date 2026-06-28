@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Heart, ShoppingBag, ChevronDown, ChevronUp, Check, ArrowLeft } from "lucide-react";
 import {
   BOTTLE_SIZES,
+  SPRAY_COUNTS,
   isSizeAvailable,
   resolveSizePrice,
   formatPrice,
@@ -76,6 +77,7 @@ export default function ProductDetailClient({ product, reviews, isSignedIn, user
   const [reviewBody, setReviewBody] = useState(userReview?.body ?? "");
   const [reviewError, setReviewError] = useState("");
   const [reviewSuccess, setReviewSuccess] = useState(false);
+  const [showReviewForm, setShowReviewForm] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const selectedPricing = resolveSizePrice(product, selectedSize);
@@ -167,6 +169,70 @@ export default function ProductDetailClient({ product, reviews, isSignedIn, user
     Winter: "bg-[#C8D8EC] text-[#1A3A5C]",
   };
 
+  // ── Reusable review blocks ──────────────────────────────────────────────────
+  const reviewFormBlock = (
+    <div className="mb-10 p-6 bg-white border border-[#E8E4DE] text-left">
+      <h3 className="text-[11px] tracking-[0.2em] uppercase font-medium text-[#111] mb-5">
+        {userReview ? "Update Your Review" : "Write a Review"}
+      </h3>
+      <form onSubmit={handleSubmitReview} className="space-y-4">
+        <div>
+          <label className="text-[11px] tracking-[0.15em] uppercase text-[#6B6B6B] block mb-2">Rating</label>
+          <StarPicker value={reviewRating} onChange={setReviewRating} />
+        </div>
+        <div>
+          <label className="text-[11px] tracking-[0.15em] uppercase text-[#6B6B6B] block mb-2">Title (optional)</label>
+          <input
+            type="text"
+            value={reviewTitle}
+            onChange={(e) => setReviewTitle(e.target.value)}
+            placeholder="e.g. Absolute masterpiece"
+            className="w-full border border-[#E8E4DE] px-4 py-3 text-sm text-[#111] placeholder-[#B0ADA8] focus:outline-none focus:border-[#111] transition-colors"
+          />
+        </div>
+        <div>
+          <label className="text-[11px] tracking-[0.15em] uppercase text-[#6B6B6B] block mb-2">Review</label>
+          <textarea
+            value={reviewBody}
+            onChange={(e) => setReviewBody(e.target.value)}
+            placeholder="Share your experience with this fragrance…"
+            rows={4}
+            className="w-full border border-[#E8E4DE] px-4 py-3 text-sm text-[#111] placeholder-[#B0ADA8] focus:outline-none focus:border-[#111] transition-colors resize-none"
+          />
+        </div>
+        {reviewError && (
+          <p className="text-red-600 text-sm">{reviewError}</p>
+        )}
+        <button
+          type="submit"
+          disabled={isPending}
+          className="bg-[#111] text-white text-[11px] tracking-[0.2em] uppercase px-8 py-3 hover:bg-[#333] transition-colors disabled:opacity-60"
+        >
+          {isPending ? "Submitting…" : "Submit Review"}
+        </button>
+      </form>
+    </div>
+  );
+
+  const reviewSuccessBlock = (
+    <div className="mb-10 p-5 bg-[#F0F7F0] border border-[#A8D4A8] text-[#2A5A2A] text-sm flex items-center gap-3">
+      <Check size={16} />
+      Thank you for your review! It will appear shortly.
+    </div>
+  );
+
+  const signInPrompt = (
+    <div className="mb-10 p-5 border border-[#E8E4DE] text-center">
+      <p className="text-[13px] text-[#6B6B6B] mb-3">Sign in to leave a review</p>
+      <Link
+        href={`/account?redirectTo=/products/${product.id}`}
+        className="text-[11px] tracking-[0.2em] uppercase text-[#111] border-b border-[#111] pb-0.5 hover:text-[#C9A86C] hover:border-[#C9A86C] transition-colors"
+      >
+        Sign in →
+      </Link>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-[#FAFAF8]">
       {/* Back + Breadcrumb */}
@@ -254,7 +320,9 @@ export default function ProductDetailClient({ product, reviews, isSignedIn, user
             <StarRating value={avgRating} />
             <span className="text-sm font-semibold text-[#111]">{avgRating.toFixed(1)}</span>
             <span className="text-[12px] text-[#6B6B6B]">
-              ({reviews.length} {reviews.length === 1 ? "review" : "reviews"})
+              {reviews.length > 0
+                ? `(${reviews.length} ${reviews.length === 1 ? "review" : "reviews"})`
+                : "Perfume Rating"}
             </span>
           </div>
 
@@ -318,6 +386,11 @@ export default function ProductDetailClient({ product, reviews, isSignedIn, user
                         "Unavailable"
                       )}
                     </span>
+                    {available && (
+                      <span className={`text-[10px] mt-0.5 ${isSelected ? "text-white/60" : "text-[#9A9690]"}`}>
+                        {SPRAY_COUNTS[size]} sprays
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -404,6 +477,34 @@ export default function ProductDetailClient({ product, reviews, isSignedIn, user
 
       {/* ── Reviews Section ──────────────────────────────────────────────────── */}
       <section className="max-w-screen-xl mx-auto px-5 md:px-10 py-16 border-t border-[#E8E4DE]">
+        {reviews.length === 0 ? (
+          /* No reviews yet — keep the section hidden and offer a way to add one. */
+          <div className="max-w-xl mx-auto text-center">
+            <h2 className="text-2xl font-[family-name:var(--font-cormorant)] font-medium italic text-[#111] mb-3">
+              Reviews
+            </h2>
+            <p className="text-[13px] text-[#6B6B6B] mb-6">
+              No reviews yet. Be the first to share your thoughts on this fragrance.
+            </p>
+            {reviewSuccess ? (
+              reviewSuccessBlock
+            ) : isSignedIn ? (
+              showReviewForm ? (
+                reviewFormBlock
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowReviewForm(true)}
+                  className="inline-block bg-[#111] text-white text-[11px] tracking-[0.2em] uppercase px-8 py-3 hover:bg-[#333] transition-colors"
+                >
+                  Add a Review
+                </button>
+              )
+            ) : (
+              signInPrompt
+            )}
+          </div>
+        ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
 
           {/* Rating summary */}
@@ -444,76 +545,14 @@ export default function ProductDetailClient({ product, reviews, isSignedIn, user
           {/* Reviews list + write review */}
           <div className="lg:col-span-2">
             {/* Write review */}
-            {isSignedIn && !reviewSuccess && (
-              <div className="mb-10 p-6 bg-white border border-[#E8E4DE]">
-                <h3 className="text-[11px] tracking-[0.2em] uppercase font-medium text-[#111] mb-5">
-                  {userReview ? "Update Your Review" : "Write a Review"}
-                </h3>
-                <form onSubmit={handleSubmitReview} className="space-y-4">
-                  <div>
-                    <label className="text-[11px] tracking-[0.15em] uppercase text-[#6B6B6B] block mb-2">Rating</label>
-                    <StarPicker value={reviewRating} onChange={setReviewRating} />
-                  </div>
-                  <div>
-                    <label className="text-[11px] tracking-[0.15em] uppercase text-[#6B6B6B] block mb-2">Title (optional)</label>
-                    <input
-                      type="text"
-                      value={reviewTitle}
-                      onChange={(e) => setReviewTitle(e.target.value)}
-                      placeholder="e.g. Absolute masterpiece"
-                      className="w-full border border-[#E8E4DE] px-4 py-3 text-sm text-[#111] placeholder-[#B0ADA8] focus:outline-none focus:border-[#111] transition-colors"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] tracking-[0.15em] uppercase text-[#6B6B6B] block mb-2">Review</label>
-                    <textarea
-                      value={reviewBody}
-                      onChange={(e) => setReviewBody(e.target.value)}
-                      placeholder="Share your experience with this fragrance…"
-                      rows={4}
-                      className="w-full border border-[#E8E4DE] px-4 py-3 text-sm text-[#111] placeholder-[#B0ADA8] focus:outline-none focus:border-[#111] transition-colors resize-none"
-                    />
-                  </div>
-                  {reviewError && (
-                    <p className="text-red-600 text-sm">{reviewError}</p>
-                  )}
-                  <button
-                    type="submit"
-                    disabled={isPending}
-                    className="bg-[#111] text-white text-[11px] tracking-[0.2em] uppercase px-8 py-3 hover:bg-[#333] transition-colors disabled:opacity-60"
-                  >
-                    {isPending ? "Submitting…" : "Submit Review"}
-                  </button>
-                </form>
-              </div>
-            )}
+            {isSignedIn && !reviewSuccess && reviewFormBlock}
 
-            {reviewSuccess && (
-              <div className="mb-10 p-5 bg-[#F0F7F0] border border-[#A8D4A8] text-[#2A5A2A] text-sm flex items-center gap-3">
-                <Check size={16} />
-                Thank you for your review! It will appear shortly.
-              </div>
-            )}
+            {reviewSuccess && reviewSuccessBlock}
 
-            {!isSignedIn && (
-              <div className="mb-10 p-5 border border-[#E8E4DE] text-center">
-                <p className="text-[13px] text-[#6B6B6B] mb-3">Sign in to leave a review</p>
-                <Link
-                  href={`/account?redirectTo=/products/${product.id}`}
-                  className="text-[11px] tracking-[0.2em] uppercase text-[#111] border-b border-[#111] pb-0.5 hover:text-[#C9A86C] hover:border-[#C9A86C] transition-colors"
-                >
-                  Sign in →
-                </Link>
-              </div>
-            )}
+            {!isSignedIn && signInPrompt}
 
             {/* Review list */}
-            {reviews.length === 0 ? (
-              <p className="text-[13px] text-[#6B6B6B] text-center py-8">
-                No reviews yet. Be the first to share your thoughts.
-              </p>
-            ) : (
-              <div className="space-y-8">
+            <div className="space-y-8">
                 {reviews.map((review) => {
                   const profileData = review.profile as { full_name?: string; avatar_url?: string } | null;
                   const name = profileData?.full_name ?? "Anonymous";
@@ -562,10 +601,10 @@ export default function ProductDetailClient({ product, reviews, isSignedIn, user
                     </article>
                   );
                 })}
-              </div>
-            )}
+            </div>
           </div>
         </div>
+        )}
       </section>
     </div>
   );

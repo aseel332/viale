@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getCart } from "@/lib/server/cart";
-import { shippingFor } from "@/lib/shipping";
 import CartClient from "./CartClient";
 
 export const metadata = { title: "Your Bag — Viale" };
@@ -37,7 +36,6 @@ export default async function CartPage() {
           <CartClient
             initialLines={cart.lines}
             subtotal={cart.subtotal}
-            shipping={shippingFor(cart.subtotal)}
           />
         )}
       </div>

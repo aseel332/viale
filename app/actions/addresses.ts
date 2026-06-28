@@ -12,7 +12,7 @@ export interface AddressActionState {
 function readAddress(formData: FormData) {
   const label = (formData.get("label") as string | null)?.trim() || "Home";
   const fullName = (formData.get("full_name") as string | null)?.trim() ?? "";
-  const phone = (formData.get("phone") as string | null)?.trim() || null;
+  const phone = (formData.get("phone") as string | null)?.trim() ?? "";
   const line1 = (formData.get("line1") as string | null)?.trim() ?? "";
   const line2 = (formData.get("line2") as string | null)?.trim() || null;
   const landmark = (formData.get("landmark") as string | null)?.trim() || null;
@@ -22,6 +22,8 @@ function readAddress(formData: FormData) {
   const isDefault = formData.get("is_default") === "on";
 
   if (!fullName) return { error: "Enter the recipient name." };
+  if (!phone) return { error: "Enter a phone number." };
+  if (phone.replace(/\D/g, "").length < 10) return { error: "Enter a valid phone number with at least 10 digits." };
   if (!line1) return { error: "Enter the street address." };
   if (!state) return { error: "Select the state." };
   if (!city) return { error: "Enter the city." };

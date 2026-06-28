@@ -12,10 +12,9 @@ import type { CartLine } from "@/types/commerce";
 interface Props {
   initialLines: CartLine[];
   subtotal: number;
-  shipping: number;
 }
 
-export default function CartClient({ initialLines, subtotal, shipping }: Props) {
+export default function CartClient({ initialLines, subtotal }: Props) {
   const router = useRouter();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
@@ -58,7 +57,6 @@ export default function CartClient({ initialLines, subtotal, shipping }: Props) 
     );
   }
 
-  const total = subtotal + shipping;
   const remainingForFree = Math.max(0, FREE_SHIPPING_THRESHOLD - subtotal);
 
   return (
@@ -172,7 +170,7 @@ export default function CartClient({ initialLines, subtotal, shipping }: Props) 
             </div>
             <div className="flex justify-between text-[#4A4A4A]">
               <span>Shipping</span>
-              <span className="tabular-nums">{shipping === 0 ? "Free" : formatPrice(shipping)}</span>
+              <span className="text-[#6B6B6B]">Calculated at checkout</span>
             </div>
             {remainingForFree > 0 && (
               <p className="text-[11px] text-[#C9A86C] leading-relaxed">
@@ -186,7 +184,7 @@ export default function CartClient({ initialLines, subtotal, shipping }: Props) 
           <div className="flex justify-between items-baseline mb-6">
             <span className="text-[12px] tracking-[0.1em] uppercase text-[#111]">Total</span>
             <span className="text-2xl font-[family-name:var(--font-cormorant)] font-medium text-[#111] tabular-nums">
-              {formatPrice(total)}
+              {formatPrice(subtotal)}
             </span>
           </div>
 

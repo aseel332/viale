@@ -24,6 +24,13 @@ export const SIZE_MULTIPLIERS: Record<BottleSize, number> = {
   30: 4.5,
 };
 
+// Approximate number of sprays per bottle size (≈13 sprays/ml).
+export const SPRAY_COUNTS: Record<BottleSize, number> = {
+  5: 65,
+  10: 130,
+  30: 390,
+};
+
 export function priceForSize(basePrice: number, size: BottleSize): number {
   return Math.round((basePrice * SIZE_MULTIPLIERS[size]) / 10) * 10;
 }

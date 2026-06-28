@@ -181,7 +181,7 @@ export default function AddressFormModal({ open, address, onClose, onSaved }: Pr
               <input type="hidden" name="country" value="IN" />
             </div>
             <Field label="Recipient Name" name="full_name" value={draft.full_name} onChange={(v) => setField("full_name", v)} className="col-span-2" />
-            <Field label="Phone" name="phone" value={draft.phone} onChange={(v) => setField("phone", v)} type="tel" className="col-span-2" />
+            <Field label="Phone" name="phone" value={draft.phone} onChange={(v) => setField("phone", v)} type="tel" required placeholder="10-digit mobile number" className="col-span-2" />
             <Field label="Address Line 1" name="line1" value={draft.line1} onChange={(v) => setField("line1", v)} placeholder="House no., street, area" className="col-span-2" />
             <Field label="Address Line 2 (optional)" name="line2" value={draft.line2} onChange={(v) => setField("line2", v)} placeholder="House/apartment name, tower, floor" className="col-span-2" />
             <Field label="Landmark" name="landmark" value={draft.landmark} onChange={(v) => setField("landmark", v)} placeholder="e.g. Near Phoenix Mall" className="col-span-2" />
@@ -325,6 +325,7 @@ function Field({
   type = "text",
   placeholder,
   maxLength,
+  required = false,
 }: {
   label: string;
   name: string;
@@ -334,10 +335,14 @@ function Field({
   type?: string;
   placeholder?: string;
   maxLength?: number;
+  required?: boolean;
 }) {
   return (
     <div className={className}>
-      <label className="block text-[10px] tracking-[0.15em] uppercase text-[#6B6B6B] mb-2">{label}</label>
+      <label className="block text-[10px] tracking-[0.15em] uppercase text-[#6B6B6B] mb-2">
+        {label}
+        {required && <span className="text-[#C9A86C]"> *</span>}
+      </label>
       <input
         name={name}
         type={type}
@@ -345,6 +350,7 @@ function Field({
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         maxLength={maxLength}
+        required={required}
         className="w-full px-4 py-3 bg-white border border-[#E8E4DE] text-sm text-[#111] placeholder:text-[#B0ADA8] focus:outline-none focus:border-[#111] transition-colors"
       />
     </div>
