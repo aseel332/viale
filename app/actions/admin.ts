@@ -31,6 +31,7 @@ import type {
   PerfumeDiscoverySegment,
   PerfumeImportRow,
   ProductInsert,
+  ProductUpdate,
   Season,
   SeasonCategory,
   SizeAvailabilityMap,
@@ -563,21 +564,52 @@ export async function updateProductAdmin(formData: FormData) {
   const productId = requiredField(formData, "product_id", "Product id");
   const { basePrice, baseDiscount, sizePricing } = parseSizePricing(formData);
 
-  const { error } = await supabase
-    .from("products")
-    .update({
-      price: basePrice,
-      discount_price: baseDiscount,
-      size_pricing: Object.keys(sizePricing).length > 0 ? sizePricing : null,
-      size_availability: parseSizeAvailability(formData),
-      tag: field(formData, "tag") || null,
-      is_active: parseBoolean(formData, "is_active", false),
-      is_top_pick: parseBoolean(formData, "is_top_pick", false),
-      top_pick_order: parseOrder(field(formData, "top_pick_order")),
-    })
-    .eq("id", productId);
+  const updates: ProductUpdate = {
+    price: basePrice,
+    discount_price: baseDiscount,
+    size_pricing: Object.keys(sizePricing).length > 0 ? sizePricing : null,
+    size_availability: parseSizeAvailability(formData),
+    tag: field(formData, "tag") || null,
+    is_active: parseBoolean(formData, "is_active", false),
+    is_top_pick: parseBoolean(formData, "is_top_pick", false),
+    top_pick_order: parseOrder(field(formData, "top_pick_order")),
+  };
 
+  // Optional image replacement. Upload the new bottle image and point the
+  // product at it before the row update, so an invalid file fails fast without
+  // persisting the other edits. The previous path is captured first so we can
+  // clean it out of the bucket afterwards.
+  const upload = fileField(formData, "image");
+  let previousImagePath: string | null = null;
+  if (upload) {
+    const { data: existing, error: lookupError } = await supabase
+      .from("products")
+      .select("image_path")
+      .eq("id", productId)
+      .maybeSingle();
+
+    if (lookupError) throw new Error(lookupError.message);
+    previousImagePath = existing?.image_path ?? null;
+
+    updates.image_path = await uploadImageFile(
+      supabase,
+      upload,
+      uploadFileObjectPath("catalog/products", productId, upload),
+    );
+  }
+
+  const { error } = await supabase.from("products").update(updates).eq("id", productId);
   if (error) throw new Error(error.message);
+
+  // Delete the old object only when the new upload landed at a different path
+  // (i.e. a different file extension). A same-extension upload overwrote it in
+  // place, so the stored URL is unchanged and the old bytes are already gone —
+  // removing that path would delete the image we just uploaded. Local/default
+  // paths are ignored by removeProductImages.
+  if (previousImagePath && previousImagePath !== updates.image_path) {
+    await removeProductImages(supabase, [previousImagePath]).catch(() => undefined);
+  }
+
   await revalidateCatalog(productId);
 }
 

@@ -596,6 +596,30 @@ function ProductRowEditor({ product }: { product: ProductRow }) {
           <input type="hidden" name="product_id" value={product.id} />
           <SizePriceFields product={product} />
           <div className="grid content-start gap-3">
+            <div className="rounded-md border border-[#E8E4DE] bg-white p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#6B6B6B]">Bottle image</p>
+              <div className="mt-2 flex items-start gap-3">
+                <div className="h-20 w-16 flex-shrink-0 overflow-hidden rounded bg-[#F5F1EB]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={product.image_path || "/collection_img.png"}
+                    alt={product.name}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <input
+                    name="image"
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/avif"
+                    className={`${inputClass("mt-0")} file:mr-2 file:rounded file:border-0 file:bg-[#111] file:px-2 file:py-1 file:text-[10px] file:font-semibold file:text-white`}
+                  />
+                  <p className="mt-1 text-[10px] leading-relaxed text-[#6B6B6B]">
+                    Upload to replace the current image — the old file is deleted from storage. Leave empty to keep it.
+                  </p>
+                </div>
+              </div>
+            </div>
             <div>
               <Label>Tag</Label>
               <input name="tag" defaultValue={product.tag ?? ""} placeholder="Bestseller" className={inputClass()} />
